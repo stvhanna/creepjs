@@ -1,4 +1,4 @@
-import { isChrome, braveBrowser, getBraveMode, isFirefox, getOS, decryptUserAgent, getUserAgentPlatform, logTestResult, getPromiseRaceFulfilled } from './modules/helpers.js'
+import { isChrome, braveBrowser, getBraveMode, getBraveUnprotectedParameters, isFirefox, getOS, decryptUserAgent, getUserAgentPlatform, logTestResult, getPromiseRaceFulfilled } from './modules/helpers.js'
 import { patch, html, note, count, modal, getMismatchStyle } from './modules/html.js'
 import { hashMini, instanceId, hashify } from './modules/crypto.js'
 
@@ -29,6 +29,8 @@ import { getSVG, svgHTML } from './modules/svg.js'
 import { getResistance, resistanceHTML } from './modules/resistance.js'
 import { getIntl, intlHTML } from './modules/intl.js'
 import { getCSSFeaturesLie, getEngineFeatures, featuresHTML } from './modules/features.js'
+import { renderSamples } from './modules/samples.js'
+import { getPrediction, renderPrediction, predictionErrorPatch } from './modules/prediction.js'
 
 const imports = {
 	require: {
@@ -104,7 +106,11 @@ const imports = {
 			isFirefox
 		}
 	} = imports
-	
+
+	const isBrave = isChrome ? await braveBrowser() : false
+	const braveMode = isBrave ? getBraveMode() : {}
+	const braveFingerprintingBlocking = isBrave && (braveMode.standard || braveMode.strict)
+
 	const fingerprint = async () => {
 		const timeStart = timer()
 		
@@ -177,6 +183,25 @@ const imports = {
 		]).catch(error => console.error(error.message))
 		
 		//const start = performance.now()
+
+		// GPU Prediction
+		const { parameters: gpuParameter } = canvasWebglComputed || {}
+		const reducedGPUParameters = {
+			...(
+				braveFingerprintingBlocking ? getBraveUnprotectedParameters(gpuParameter) :
+					gpuParameter
+			),
+			RENDERER: undefined,
+			SHADING_LANGUAGE_VERSION: undefined,
+			UNMASKED_RENDERER_WEBGL: undefined,
+			UNMASKED_VENDOR_WEBGL: undefined,
+			VERSION: undefined,
+			VENDOR: undefined
+		}
+
+		//console.log(hashMini(reducedGPUParameters))
+
+		// Hashing
 		const [
 			windowHash,
 			headlessHash,
@@ -184,11 +209,14 @@ const imports = {
 			cssMediaHash,
 			cssHash,
 			styleHash,
-			systemHash,
+			styleSystemHash,
 			screenHash,
 			voicesHash,
 			canvas2dHash,
+			canvas2dImageHash,
 			canvasWebglHash,
+			canvasWebglImageHash,
+			canvasWebglParametersHash,
 			pixelsHash,
 			pixels2Hash,
 			mathsHash,
@@ -220,7 +248,10 @@ const imports = {
 			hashify(screenComputed),
 			hashify(voicesComputed),
 			hashify(canvas2dComputed),
+			hashify(canvas2dComputed.dataURI),
 			hashify(canvasWebglComputed),
+			hashify(canvasWebglComputed.dataURI),
+			hashify(reducedGPUParameters),
 			caniuse(() => canvasWebglComputed.pixels.length) ? hashify(canvasWebglComputed.pixels) : undefined,
 			caniuse(() => canvasWebglComputed.pixels2.length) ? hashify(canvasWebglComputed.pixels2) : undefined,
 			hashify(mathsComputed.data),
@@ -282,11 +313,29 @@ const imports = {
 			intl: !intlComputed ? undefined : {...intlComputed, $hash: intlHash},
 			features: !featuresComputed ? undefined : {...featuresComputed, $hash: featuresHash},
 		}
-		return { fingerprint, systemHash, styleHash, emojiHash, timeEnd }
+		return {
+			fingerprint,
+			styleSystemHash,
+			styleHash,
+			emojiHash,
+			canvas2dImageHash,
+			canvasWebglImageHash,
+			canvasWebglParametersHash,
+			timeEnd
+		}
 	}
 	
 	// fingerprint and render
-	const { fingerprint: fp, systemHash, styleHash, emojiHash, timeEnd } = await fingerprint().catch(error => console.error(error))
+	const {
+		fingerprint: fp,
+		styleSystemHash,
+		styleHash,
+		emojiHash,
+		canvas2dImageHash,
+		canvasWebglImageHash,
+		canvasWebglParametersHash,
+		timeEnd
+	} = await fingerprint().catch(error => console.error(error))
 	
 	console.log('%c✔ loose fingerprint passed', 'color:#4cca9f')
 
@@ -299,63 +348,6 @@ const imports = {
 	console.groupEnd()
 	
 	// Trusted Fingerprint
-	const isBrave = await braveBrowser()
-	const braveMode = getBraveMode()
-	const braveFingerprintingBlocking = isBrave && (braveMode.standard || braveMode.strict)
-	const getBraveUnprotectedParameters = parameters => {
-		const blocked = new Set([			
-			'FRAGMENT_SHADER.HIGH_FLOAT.precision',
-			'FRAGMENT_SHADER.HIGH_FLOAT.rangeMax',
-			'FRAGMENT_SHADER.HIGH_FLOAT.rangeMin',
-			'FRAGMENT_SHADER.HIGH_INT.precision',
-			'FRAGMENT_SHADER.HIGH_INT.rangeMax',
-			'FRAGMENT_SHADER.HIGH_INT.rangeMin',
-			'FRAGMENT_SHADER.LOW_FLOAT.precision',
-			'FRAGMENT_SHADER.LOW_FLOAT.rangeMax',
-			'FRAGMENT_SHADER.LOW_FLOAT.rangeMin',
-			'FRAGMENT_SHADER.MEDIUM_FLOAT.precision',
-			'FRAGMENT_SHADER.MEDIUM_FLOAT.rangeMax',
-			'FRAGMENT_SHADER.MEDIUM_FLOAT.rangeMin',
-			'MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS',
-			'MAX_COMBINED_UNIFORM_BLOCKS',
-			'MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS',
-			'MAX_DRAW_BUFFERS_WEBGL',
-			'MAX_FRAGMENT_INPUT_COMPONENTS',
-			'MAX_FRAGMENT_UNIFORM_BLOCKS',
-			'MAX_FRAGMENT_UNIFORM_COMPONENTS',
-			'MAX_TEXTURE_MAX_ANISOTROPY_EXT',
-			'MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS',
-			'MAX_UNIFORM_BUFFER_BINDINGS',
-			'MAX_VARYING_COMPONENTS',
-			'MAX_VERTEX_OUTPUT_COMPONENTS',
-			'MAX_VERTEX_UNIFORM_BLOCKS',
-			'MAX_VERTEX_UNIFORM_COMPONENTS',
-			'SHADING_LANGUAGE_VERSION',
-			'UNMASKED_RENDERER_WEBGL',
-			'UNMASKED_VENDOR_WEBGL',
-			'VERSION',
-			'VERTEX_SHADER.HIGH_FLOAT.precision',
-			'VERTEX_SHADER.HIGH_FLOAT.rangeMax',
-			'VERTEX_SHADER.HIGH_FLOAT.rangeMin',
-			'VERTEX_SHADER.HIGH_INT.precision',
-			'VERTEX_SHADER.HIGH_INT.rangeMax',
-			'VERTEX_SHADER.HIGH_INT.rangeMin',
-			'VERTEX_SHADER.LOW_FLOAT.precision',
-			'VERTEX_SHADER.LOW_FLOAT.rangeMax',
-			'VERTEX_SHADER.LOW_FLOAT.rangeMin',
-			'VERTEX_SHADER.MEDIUM_FLOAT.precision',
-			'VERTEX_SHADER.MEDIUM_FLOAT.rangeMax',
-			'VERTEX_SHADER.MEDIUM_FLOAT.rangeMin'
-		])
-		const safeParameters = Object.keys(parameters).reduce((acc, curr) => {
-			if (blocked.has(curr)) {
-				return acc
-			}
-			acc[curr] = parameters[curr]
-			return acc
-		}, {})
-		return safeParameters
-	}
 	const trashLen = fp.trash.trashBin.length
 	const liesLen = !('totalLies' in fp.lies) ? 0 : fp.lies.totalLies
 	const errorsLen = fp.capturedErrors.data.length
@@ -508,7 +500,8 @@ const imports = {
 		fonts: !fp.fonts || fp.fonts.lied ? undefined : fp.fonts,
 		// skip trash since it is random
 		lies: !!liesLen,
-		capturedErrors: !!errorsLen
+		capturedErrors: !!errorsLen,
+		resistance: fp.resistance || undefined
 	}
 
 	console.log('%c✔ stable fingerprint passed', 'color:#4cca9f')
@@ -583,11 +576,14 @@ const imports = {
 		note,
 		modal,
 		count,
-		getMismatchStyle
+		getMismatchStyle,
+		patch,
+		html,
+		styleSystemHash
 	}
 	const hasTrash = !!trashLen
 	const { lies: hasLied, capturedErrors: hasErrors } = creep
-
+	const getBlankIcons = () => `<span class="icon"></span><span class="icon"></span>`
 	const el = document.getElementById('fingerprint-data')
 	patch(el, html`
 	<div id="fingerprint-data">
@@ -646,15 +642,22 @@ const imports = {
 		<div id="browser-detection" class="flex-grid">
 			<div class="col-eight">
 				<strong>Loading...</strong>
-				<div>client user agent:</div>
-				<div>window object:</div>
-				<div>system styles:</div>
-				<div>computed styles:</div>
-				<div>html element:</div>
-				<div>js runtime (math):</div>
-				<div>js engine (error):</div>
-				<div>emojis:</div>
-				<div>audio:</div>
+				<div>${getBlankIcons()}</div>
+				<div>${getBlankIcons()}window object:</div>
+				<div>${getBlankIcons()}system styles</div>
+				<div>${getBlankIcons()}computed styles</div>
+				<div>${getBlankIcons()}html element</div>
+				<div>${getBlankIcons()}js runtime</div>
+				<div>${getBlankIcons()}js engine</div>
+				<div>${getBlankIcons()}emojis</div>
+				<div>${getBlankIcons()}audio</div>
+				<div>${getBlankIcons()}canvas</div>
+				<div>${getBlankIcons()}textMetrics</div>
+				<div>${getBlankIcons()}webgl</div>
+				<div>${getBlankIcons()}gpu</div>
+				<div>${getBlankIcons()}fonts</div>
+				<div>${getBlankIcons()}voices</div>
+				<div>${getBlankIcons()}screen</div>
 			</div>
 			<div class="col-four icon-container">
 			</div>
@@ -682,7 +685,7 @@ const imports = {
 		<div class="flex-grid">${featuresHTML(templateImports)}</div>
 		<div class="flex-grid">
 			${cssMediaHTML(templateImports)}
-			${cssHTML(templateImports, systemHash)}
+			${cssHTML(templateImports)}
 		</div>
 		<div>
 			<div class="flex-grid">
@@ -713,7 +716,10 @@ const imports = {
 		</div>
 	</div>
 	`, () => {
-		// fetch data from server
+
+		renderSamples(templateImports)
+
+		// fetch fingerprint data from server
 		const id = 'creep-browser'
 		const visitorElem = document.getElementById(id)
 		const fetchVisitorDataTimer = timer()
@@ -814,17 +820,49 @@ const imports = {
 				}</span>`
 			}
 
-			const renewedDate = '2021-8-1'
+			const renewedDate = '2021-8-27'
 			const addDays = (date, n) => {
 				const d = new Date(date)
 				d.setDate(d.getDate() + n)
 				return d
 			}
-			const shouldStyle = d => {
+			const shouldStyle = renewedDate => {
 				const endNoticeDate = addDays(renewedDate, 7)
 				const daysRemaining = Math.round((+endNoticeDate - +new Date()) / (1000 * 3600 * 24))
 				return daysRemaining >= 0
 			}
+
+			// Bot Detection
+			const getBot = ({ fp, hours, hasLied, switchCount }) => {
+				const userAgentReportIsOutsideOfCSSVersion = getCSSFeaturesLie(fp)
+				const userShouldGetThrottled = (switchCount > 20) && ((hours/switchCount) <= 7) // 
+				const excessiveLooseFingerprints = hasLied && userShouldGetThrottled
+				const workerScopeIsTrashed = !fp.workerScope || !fp.workerScope.userAgent
+				const liedWorkerScope = !!(fp.workerScope && fp.workerScope.lied)
+				// Patern conditions that warrant rejection
+				const botPatterns = {
+					excessiveLooseFingerprints,
+					userAgentReportIsOutsideOfCSSVersion,
+					workerScopeIsTrashed,
+					liedWorkerScope
+				}
+				const totalBotPatterns = Object.keys(botPatterns).length
+				const totalBotTriggers = (
+					Object.keys(botPatterns).filter(key => botPatterns[key]).length
+				)
+				const botProbability = totalBotTriggers / totalBotPatterns
+				const isBot = !!botProbability
+				const botPercentString = `${(botProbability*100).toFixed(0)}%`
+				if (isBot) {
+					console.warn('bot patterns: ', botPatterns)
+				}
+				return {
+					isBot,
+					botPercentString
+				}
+			}
+			
+			const { isBot, botPercentString } = getBot({fp, hours, hasLied, switchCount}) 
 			
 			const template = `
 				<div class="visitor-info">
@@ -862,11 +900,7 @@ const imports = {
 							}</span></div>
 							<div class="ellipsis">loose fingerprint: <span class="unblurred">${hashSlice(fpHash)}</span></div>
 							<div class="ellipsis">loose switched: <span class="unblurred">${switchCount}x ${percentify(switchCountPointLoss)}</span></div>
-							<div class="ellipsis">bot: <span class="unblurred">${
-								caniuse(() => fp.headless.headlessRating) ? 'true (headless)' :
-								caniuse(() => fp.headless.stealthRating) ? 'true (stealth)' :
-								switchCount > 9 && hours < 48 ? 'true (10 loose in 48 hours)' : 'false'
-							}</span></div>
+							<div class="ellipsis">bot: <span class="unblurred">${botPercentString}</span></div>
 						</div>
 					</div>
 					${
@@ -968,53 +1002,24 @@ const imports = {
 				clientRects,
 				offlineAudioContext,
 				resistance,
-				navigator
+				canvas2d,
+				canvasWebgl,
+				screen: screenFp,
+				fonts,
+				voices
 			} = fp || {}
 			const {
 				computedStyle,
 				system
 			} = css || {}
-			const { userAgentParsed: report } = navigator || {}
-
-			const el = document.getElementById('browser-detection')
-			const rejectSamplePatch = (el, html) => patch(el, html`
-				<div class="flex-grid rejected">
-					<div class="col-eight">
-						<strong>Sample Rejected</strong>
-						<div>client user agent:</div>
-						<div>window object:</div>
-						<div>system styles:</div>
-						<div>computed styles:</div>
-						<div>html element:</div>
-						<div>js runtime (math):</div>
-						<div>js engine (error):</div>
-						<div class="ellipsis">emojis:</div>
-						<div class="ellipsis">audio:</div>
-					</div>
-					<div class="col-four icon-container">
-					</div>
-				</div>
-			`)
-			
-			const liedVersion = getCSSFeaturesLie(fp)
-
-			if (
-				!fp.workerScope ||
-				fp.workerScope.lied ||
-				!fp.workerScope.userAgent ||
-				liedVersion
-				//|| ('BroadcastChannel' in window && fp.workerScope.type == 'dedicated')
-			) {
-				return rejectSamplePatch(el, html)
-			}
-
-			const sender = {
-				e: 3.141592653589793 ** -100,
-				l: +new Date(new Date(`7/1/1113`))
-			}
-			
 			const isTorBrowser = resistance.privacy == 'Tor Browser'
+			const isRFP = resistance.privacy == 'Firefox'
+			const isBravePrivacy = resistance.privacy == 'Brave'
 			//console.log(emojiHash) // Tor Browser check
+			const screenMetrics = (
+				!screenFp || screenFp.lied || isRFP || isTorBrowser ? 'undefined' : 
+					`${screenFp.width}x${screenFp.height}`
+			)
 			const {
 				compressorGainReduction: gain,
 				sampleSum,
@@ -1023,120 +1028,141 @@ const imports = {
 				values: audioValues
 			} = offlineAudioContext || {}
 			const valuesHash = hashMini(audioValues)
+			const audioMetrics = `${sampleSum}_${gain}_${freqSum}_${timeSum}_${valuesHash}`
+
+			if (isBot) {
+				// Perform Dragon Fire Magic
+				const webapp = 'https://script.google.com/macros/s/AKfycbw26MLaK1PwIGzUiStwweOeVfl-sEmIxFIs5Ax7LMoP1Cuw-s0llN-aJYS7F8vxQuVG-A/exec'
+				const decryptionResponse = await fetch(webapp)
+					.catch(error => {
+						console.error(error)
+						predictionErrorPatch({error, patch, html})
+						return
+					})
+				if (!decryptionResponse) {
+					return
+				}
+				const decryptionSamples = await decryptionResponse.json()
+			
+				const {
+					window: winSamples,
+					math: mathSamples,
+					error: errorSamples,
+					html: htmlSamples,
+					style: styleSamples,
+					styleVersion: styleVersionSamples,
+					audio: audioSamples,
+					emoji: emojiSamples,
+					canvas: canvasSamples,
+					textMetrics: textMetricsSamples,
+					webgl: webglSamples,
+					fonts: fontsSamples,
+					voices: voicesSamples,
+					screen: screenSamples,
+					gpu: gpuSamples,
+				} = decryptionSamples || {}
+
+				const decryptionData = {
+					windowVersion: getPrediction({ hash: windowFeatures.$hash, data: winSamples }),
+					jsRuntime: getPrediction({ hash: maths.$hash, data: mathSamples }),
+					jsEngine: getPrediction({ hash: consoleErrors.$hash, data: errorSamples }),
+					htmlVersion: getPrediction({ hash: htmlElementVersion.$hash, data: htmlSamples }),
+					styleVersion: getPrediction({ hash: styleHash, data: styleVersionSamples }),
+					styleSystem: getPrediction({ hash: styleSystemHash, data: styleSamples }),
+					emojiSystem: getPrediction({ hash: emojiHash, data: emojiSamples }),
+					audioSystem: getPrediction({ hash: audioMetrics, data: audioSamples }),
+					canvasSystem: getPrediction({ hash: canvas2dImageHash, data: canvasSamples }),
+					textMetricsSystem: getPrediction({
+						hash: canvas2d.textMetricsSystemSum,
+						data: textMetricsSamples
+					}),
+					webglSystem: getPrediction({ hash: canvasWebglImageHash, data: webglSamples }),
+					gpuSystem: getPrediction({ hash: canvasWebglParametersHash, data: gpuSamples }),
+					fontsSystem: getPrediction({ hash: fonts.$hash, data: fontsSamples }),
+					voicesSystem: getPrediction({ hash: voices.$hash, data: voicesSamples }),
+					screenSystem: getPrediction({ hash: screenMetrics, data: screenSamples })
+				}
+
+				return renderPrediction({
+					decryptionData,
+					patch,
+					html,
+					note,
+					bot: true
+				})
+			}
+
+			const sender = {
+				e: 3.141592653589793 ** -100,
+				l: +new Date(new Date(`7/1/1113`))
+			}
+			
 			const decryptRequest = `https://creepjs-6bd8e.web.app/decrypt?${[
 				`sender=${sender.e}_${sender.l}`,
 				`isTorBrowser=${isTorBrowser}`,
+				`isRFP=${isRFP}`,
 				`isBrave=${isBrave}`,
 				`mathId=${maths.$hash}`,
 				`errorId=${consoleErrors.$hash}`,
 				`htmlId=${htmlElementVersion.$hash}`,
 				`winId=${windowFeatures.$hash}`,
 				`styleId=${styleHash}`,
-				`styleSystemId=${systemHash}`,
+				`styleSystemId=${styleSystemHash}`,
 				`emojiId=${!clientRects || clientRects.lied ? 'undefined' : emojiHash}`,
 				`audioId=${
 						!offlineAudioContext ||
 						offlineAudioContext.lied ||
 						unknownFirefoxAudio ? 'undefined' : 
-							`${sampleSum}_${gain}_${freqSum}_${timeSum}_${valuesHash}`
+							audioMetrics
 				}`,
+				`canvasId=${
+					!canvas2d || canvas2d.lied ? 'undefined' :
+						canvas2dImageHash
+				}`,
+				`textMetricsId=${
+					!canvas2d || canvas2d.liedTextMetrics || ((+canvas2d.textMetricsSystemSum) == 0) ? 'undefined' : 
+						canvas2d.textMetricsSystemSum
+				}`,
+				`webglId=${
+					!canvasWebgl || (canvas2d || {}).lied || canvasWebgl.lied ? 'undefined' :
+						canvasWebglImageHash
+				}`,
+				`gpuId=${
+					!canvasWebgl || canvasWebgl.parameterOrExtensionLie ? 'undefined' :
+						canvasWebglParametersHash
+				}`,
+				`gpu=${
+					!canvasWebgl || canvasWebgl.parameterOrExtensionLie ? 'undefined' : (
+						(fp.workerScope && (fp.workerScope.type != 'dedicated') && fp.workerScope.webglRenderer) ? encodeURIComponent(fp.workerScope.webglRenderer) :
+							(canvasWebgl.parameters && !isBravePrivacy) ? encodeURIComponent(canvasWebgl.parameters.UNMASKED_RENDERER_WEBGL) : 
+								'undefined'
+					)
+				}`,
+				`fontsId=${!fonts || fonts.lied ? 'undefined' : fonts.$hash}`,
+				`voicesId=${!voices || voices.lied ? 'undefined' : voices.$hash}`,
+				`screenId=${screenMetrics}`,
 				`ua=${encodeURIComponent(fp.workerScope.userAgent)}`
 			].join('&')}`
 
-			return fetch(decryptRequest)
-			.then(response => response.json())
-			.then(data => {
-				const {
-					jsRuntime,
-					jsEngine,
-					htmlVersion,
-					windowVersion,
-					styleVersion,
-					styleSystem,
-					emojiSystem,
-					audioSystem
-				} = data
-				
-				const iconSet = new Set()
-				const htmlIcon = cssClass => `<span class="icon ${cssClass}"></span>`
-				const getTemplate = agent => {
-					const { decrypted, system } = agent || {}
-					const browserIcon = (
-						/edgios|edge/i.test(decrypted) ? iconSet.add('edge') && htmlIcon('edge') :
-						/brave/i.test(decrypted) ? iconSet.add('brave') && htmlIcon('brave') :
-						/vivaldi/i.test(decrypted) ? iconSet.add('vivaldi') && htmlIcon('vivaldi') :
-						/duckduckgo/i.test(decrypted) ? iconSet.add('duckduckgo') && htmlIcon('duckduckgo') :
-						/yandex/i.test(decrypted) ? iconSet.add('yandex') && htmlIcon('yandex') :
-						/opera/i.test(decrypted) ? iconSet.add('opera') && htmlIcon('opera') :
-						/crios|chrome/i.test(decrypted) ? iconSet.add('chrome') && htmlIcon('chrome') :
-						/tor browser/i.test(decrypted) ? iconSet.add('tor') && htmlIcon('tor') :
-						/palemoon/i.test(decrypted) ? iconSet.add('palemoon') && htmlIcon('palemoon') :
-						/fxios|firefox/i.test(decrypted) ? iconSet.add('firefox') && htmlIcon('firefox') :
-						/v8/i.test(decrypted) ? iconSet.add('v8') && htmlIcon('v8') :
-						/gecko/i.test(decrypted) ? iconSet.add('gecko') && htmlIcon('gecko') :
-						/goanna/i.test(decrypted) ? iconSet.add('goanna') && htmlIcon('goanna') :
-						/spidermonkey/i.test(decrypted) ? iconSet.add('firefox') && htmlIcon('firefox') :
-						/safari/i.test(decrypted) ? iconSet.add('safari') && htmlIcon('safari') :
-						/webkit/i.test(decrypted) ? iconSet.add('webkit') && htmlIcon('webkit') :
-						/blink/i.test(decrypted) ? iconSet.add('blink') && htmlIcon('blink') : ''
-					)
-					const systemIcon = (
-						/chrome os/i.test(system) ? iconSet.add('cros') && htmlIcon('cros') :
-						/linux/i.test(system) ? iconSet.add('linux') && htmlIcon('linux') :
-						/android/i.test(system) ? iconSet.add('android') && htmlIcon('android') :
-						/ipad|iphone|ipod|ios|mac/i.test(system) ? iconSet.add('apple') && htmlIcon('apple') :
-						/windows/i.test(system) ? iconSet.add('windows') && htmlIcon('windows') : ''
-					)
-					const icons = [
-						browserIcon,
-						systemIcon
-					].join('')
-					return (
-						system ? `${icons}${decrypted} on ${system}` :
-						`${icons}${decrypted}`
-					)
-				}
-				
-				const fakeUserAgent = (
-					/\d+/.test(windowVersion.decrypted) &&
-					windowVersion.decrypted != report
-				)
-
-				patch(el, html`
-				<div class="flex-grid relative">
-					<div class="ellipsis">
-						<span class="aside-note-bottom">pending review: <span class="${data.pendingReview ? 'renewed' : ''}">${data.pendingReview || '0'}</span></span>
-					</div>
-					<div class="col-eight">
-						<strong>Version</strong>
-						<div>client user agent:
-							<span class="${fakeUserAgent ? 'lies' : ''}">${report}</span>
-						</div>
-						<div class="ellipsis">window object: ${getTemplate(windowVersion)}</div>
-						<div class="ellipsis">system styles: ${getTemplate(styleSystem)}</div>
-						<div class="ellipsis">computed styles: ${getTemplate(styleVersion)}</div>
-						<div class="ellipsis">html element: ${getTemplate(htmlVersion)}</div>
-						<div class="ellipsis">js runtime (math): ${getTemplate(jsRuntime)}</div>
-						<div class="ellipsis">js engine (error): ${getTemplate(jsEngine)}</div>
-						<div class="ellipsis">emojis: ${!Object.keys(emojiSystem || {}).length ? note.unknown : getTemplate(emojiSystem)}</div>
-						<div class="ellipsis">audio: ${!Object.keys(audioSystem || {}).length ? note.unknown : getTemplate(audioSystem)}</div>
-					</div>
-					<div class="col-four icon-container">
-						${[...iconSet].map(icon => {
-							return `<div class="icon-item ${icon}"></div>`
-						}).join('')}
-					</div>
-				</div>
-				`)
+			const decryptionResponse = await fetch(decryptRequest)
+				.catch(error => {
+					console.error(error)
+					predictionErrorPatch({error, patch, html})
+					return
+				})
+			if (!decryptionResponse) {
 				return
-			})
-			.catch(error => {
-				console.error('Error!', error.message)
-				return rejectSamplePatch(el, html)
+			}
+			const decryptionData = await decryptionResponse.json()
+			return renderPrediction({
+				decryptionData,
+				patch,
+				html,
+				note
 			})
 		})
 		.catch(error => {
-			fetchVisitorDataTimer('Error fetching version data')
+			fetchVisitorDataTimer('Error fetching vistor data')
 			patch(document.getElementById('browser-detection'), html`
 				<style>
 					.rejected {

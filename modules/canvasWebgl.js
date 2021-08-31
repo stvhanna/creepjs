@@ -211,13 +211,16 @@ export const getCanvasWebgl = async imports => {
 		// detect lies
 		const dataLie = lieProps['HTMLCanvasElement.toDataURL']
 		const contextLie = lieProps['HTMLCanvasElement.getContext']
-		let lied = (
-			dataLie ||
-			contextLie ||
+		const parameterOrExtensionLie = (
 			lieProps['WebGLRenderingContext.getParameter'] ||
 			lieProps['WebGL2RenderingContext.getParameter'] ||
 			lieProps['WebGLRenderingContext.getExtension'] ||
-			lieProps['WebGL2RenderingContext.getExtension'] ||
+			lieProps['WebGL2RenderingContext.getExtension']
+		)
+		let lied = (
+			dataLie ||
+			contextLie ||
+			parameterOrExtensionLie ||
 			lieProps['WebGLRenderingContext.getSupportedExtensions'] ||
 			lieProps['WebGL2RenderingContext.getSupportedExtensions']
 		) || false
@@ -417,6 +420,7 @@ export const getCanvasWebgl = async imports => {
 					})
 				}
 			},
+			parameterOrExtensionLie,
 			lied
 		}
 
@@ -441,7 +445,7 @@ export const webglHTML = ({ fp, note, count, modal, hashMini, hashSlice }) => {
 			<div>exts (0): ${note.blocked}</div>
 		</div>
 		<div class="col-four undefined">
-			<div>unmasked renderer:</div>
+			<div>gpu:</div>
 			<div class="block-text">${note.blocked}</div>
 		</div>
 		<div class="col-four undefined"><image /></div>`
@@ -488,7 +492,7 @@ export const webglHTML = ({ fp, note, count, modal, hashMini, hashSlice }) => {
 		}</div>
 	</div>
 	<div class="col-four${lied ? ' rejected' : ''}">
-		<div>unmasked renderer:</div>
+		<div>gpu:</div>
 		<div class="block-text">
 			<div>${
 				!parameters.UNMASKED_RENDERER_WEBGL ? note.unsupported :

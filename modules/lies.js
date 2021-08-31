@@ -239,6 +239,14 @@ const getPrototypeLies = iframeWindow => {
 	// extending the function on a fake class should throw a TypeError and message "not a constructor"
 	const getClassExtendsTypeErrorLie = apiFunction => {
 		try {
+			const shouldExitInSafari13 = (
+				/version\/13/i.test((navigator || {}).userAgent) &&
+				((3.141592653589793 ** -100) == 1.9275814160560206e-50)
+			)
+			if (shouldExitInSafari13) {
+				return false
+			}
+			// begin tests
 			class Fake extends apiFunction { }
 			return true
 		} catch (error) {
@@ -877,7 +885,7 @@ const getPluginLies = (plugins, mimeTypes) => {
 		mimeTypes.map(mimeType => mimeType.enabledPlugin)
 	)
 	const trustedPluginNames = new Set(pluginsOwnPropertyNames)
-	const mimeTypeEnabledPluginsNames = mimeTypeEnabledPlugins.map(plugin => plugin.name)
+	const mimeTypeEnabledPluginsNames = mimeTypeEnabledPlugins.map(plugin => plugin && plugin.name)
 	const trustedPluginNamesArray = [...trustedPluginNames]
 	trustedPluginNamesArray.forEach(name => {
 		const validName = new Set(mimeTypeEnabledPluginsNames).has(name)
@@ -887,6 +895,7 @@ const getPluginLies = (plugins, mimeTypes) => {
 	})
 
 	// 1. Expect plugin name to be in plugins own property names
+	/* [1-2 are unstable tests as of Chrome 94]
 	plugins.forEach(plugin => {
 		if (!trustedPluginNames.has(plugin.name)) {
 			lies.push('missing plugin name')
@@ -908,6 +917,7 @@ const getPluginLies = (plugins, mimeTypes) => {
 	if (mismatchingPlugins) {
 		lies.push('mismatching plugins')
 	}
+	*/
 
 	// 3. Expect MimeType object in plugins
 	const invalidPlugins = plugins.filter(plugin => {

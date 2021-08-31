@@ -481,7 +481,10 @@ export const getNavigator = async (imports, workerScope) => {
 				return writingSystemKeys
 			}),
 			bluetoothAvailability: await attempt(async () => {
-				if (!('bluetooth' in phantomNavigator) || !phantomNavigator.bluetooth) {
+				if (
+					!('bluetooth' in phantomNavigator) ||
+					!phantomNavigator.bluetooth ||
+					!phantomNavigator.bluetooth.getAvailability) {
 					return undefined
 				}
 				const available = await navigator.bluetooth.getAvailability()
@@ -763,8 +766,11 @@ export const navigatorHTML = ({ fp, hashSlice, hashMini, note, modal, count }) =
 		<div class="block-text help" title="Navigator.deviceMemory\nNavigator.hardwareConcurrency\nNavigator.maxTouchPoints\nNavigator.oscpu\nNavigator.platform\nNavigator.userAgent">
 			${oscpu ? oscpu : ''}
 			${`${oscpu ? '<br>' : ''}${system}${platform ? ` (${platform})` : ''}`}
-			${device ? `<br>${device}` : note.blocked}
-			<br>cores: ${hardwareConcurrency}${deviceMemory ? `, memory: ${deviceMemory}` : ''}${typeof maxTouchPoints != 'undefined' ? `, touch: ${''+maxTouchPoints}` : ''}
+			${device ? `<br>${device}` : note.blocked}${
+				hardwareConcurrency && deviceMemory ? `<br>cores: ${hardwareConcurrency}, memory: ${deviceMemory}` :
+				hardwareConcurrency && !deviceMemory ? `<br>cores: ${hardwareConcurrency}` :
+				!hardwareConcurrency && deviceMemory ? `<br>memory: ${deviceMemory}` : ''
+			}${typeof maxTouchPoints != 'undefined' ? `, touch: ${''+maxTouchPoints}` : ''}
 		</div>
 		<div>ua parsed: ${userAgentParsed || note.blocked}</div>
 		<div>userAgent:</div>

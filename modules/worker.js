@@ -74,11 +74,15 @@ const getServiceWorker = () => {
 				console.error(error)
 				return resolve()
 			})
-			const registration = await navigator.serviceWorker.ready
+			//const registration = await navigator.serviceWorker.ready
+			const registration = await navigator.serviceWorker.getRegistration(source)
 			.catch(error => {
 				console.error(error)
 				return resolve()
 			})
+			if (!registration) {
+				return resolve()
+			}
 
 			if (!('BroadcastChannel' in window)) {
 				return resolve() // no support in Safari and iOS
@@ -144,6 +148,7 @@ export const getBestWorkerScope = async imports => {
 			// detect lies 
 			const {
 				fontSystemClass,
+				textMetricsSystemClass,
 				system,
 				userAgent,
 				userAgentData,
@@ -160,8 +165,22 @@ export const getBestWorkerScope = async imports => {
 			)
 			if (fontSystemLie) {
 				workerScope.lied = true
-				workerScope.lies.system = `${fontSystemClass} fonts and ${system} user agent do not match`
-				documentLie(workerScope.scope, workerScope.lies.system)
+				workerScope.lies.systemFonts = `${fontSystemClass} fonts and ${system} user agent do not match`
+				documentLie(workerScope.scope, workerScope.lies.systemFonts)
+			}
+
+			// text metrics system lie
+			const textMetricsSystemLie = textMetricsSystemClass && (
+				/^((i(pad|phone|os))|mac)$/i.test(system) && textMetricsSystemClass != 'Apple'  ? true :
+					/^(windows)$/i.test(system) && textMetricsSystemClass != 'Windows'  ? true :
+						/^(linux|chrome os)$/i.test(system) && textMetricsSystemClass != 'Linux'  ? true :
+							/^(android)$/i.test(system) && textMetricsSystemClass != 'Android'  ? true :
+								false
+			)
+			if (textMetricsSystemLie) {
+				workerScope.lied = true
+				workerScope.lies.systemTextMetrics = `${textMetricsSystemClass} text metrics and ${system} user agent do not match`
+				documentLie(workerScope.scope, workerScope.lies.systemTextMetrics)
 			}
 
 			// prototype lies
@@ -224,25 +243,25 @@ export const getBestWorkerScope = async imports => {
 			}
 			// user agent version lie
 			const getVersion = x => /\s(\d+)/i.test(x) && /\s(\d+)/i.exec(x)[1]
-			const userAgenVersion = getVersion(decryptedName)
-			const userAgenDataVersion = (
+			const userAgentVersion = getVersion(decryptedName)
+			const userAgentDataVersion = (
 				userAgentData &&
 				userAgentData.brandsVersion &&
 				userAgentData.brandsVersion.length ? 
 				getVersion(userAgentData.brandsVersion) :
 				undefined
 			)
-			const versionSupported = userAgenDataVersion && userAgenVersion
-			const versionMatch = userAgenDataVersion == userAgenVersion
+			const versionSupported = userAgentDataVersion && userAgentVersion
+			const versionMatch = userAgentDataVersion == userAgentVersion
 			if (versionSupported && !versionMatch) {
 				workerScope.lied = true
-				workerScope.lies.version = `userAgentData version ${userAgenDataVersion} and user agent version ${userAgenVersion} do not match`
+				workerScope.lies.version = `userAgentData version ${userAgentDataVersion} and user agent version ${userAgentVersion} do not match`
 				documentLie(workerScope.scope, workerScope.lies.version)
 			}
 			
 			// capture userAgent version
-			workerScope.userAgenVersion = userAgenVersion
-			workerScope.userAgenDataVersion = userAgenDataVersion
+			workerScope.userAgentVersion = userAgentVersion
+			workerScope.userAgentDataVersion = userAgentDataVersion
 			workerScope.userAgentEngine = userAgentEngine
 
 			logTestResult({ start, test: `${type} worker`, passed: true })
@@ -270,7 +289,7 @@ export const workerScopeHTML = ({ fp, note, count, modal, hashMini, hashSlice })
 			<div>codecs (0):${note.blocked}</div>
 			<div>timezone: ${note.blocked}</div>
 			<div>language: ${note.blocked}</div>
-			<div>webgl:</div>
+			<div>gpu:</div>
 			<div class="block-text">${note.blocked}</div>
 		</div>
 		<div class="col-six undefined">
@@ -304,6 +323,8 @@ export const workerScopeHTML = ({ fp, note, count, modal, hashMini, hashSlice })
 		permissions,
 		canvas2d,
 		textMetrics,
+		textMetricsSystemSum,
+		textMetricsSystemClass,
 		webglRenderer,
 		webglVendor,
 		fontFaceSetFonts,
@@ -323,15 +344,17 @@ export const workerScopeHTML = ({ fp, note, count, modal, hashMini, hashSlice })
 		'Windows': '<span class="icon windows"></span>',
 		'Android': '<span class="icon android"></span>'
 	}
-
-	const systemClassIcon = icon[fontSystemClass]
+	
+	const systemFontClassIcon = icon[fontSystemClass]
+	const systemTextMetricsClassIcon = icon[textMetricsSystemClass]
 	const fontFaceSetHash = hashMini(fontFaceSetFonts)
+	const textMetricsHash = hashMini(textMetrics)
 	const codecKeys = Object.keys(mediaCapabilities || {})
 	const permissionsKeys = Object.keys(permissions || {})
 	const permissionsGranted = (
 		permissions && permissions.granted ? permissions.granted.length : 0
 	)
-	const getSum = arr => !arr ? 0 : arr.reduce((acc, curr) => (acc += Math.abs(curr)), 0)
+
 	return `
 	<div class="ellipsis"><span class="aside-note">${scope || ''}</span></div>
 	<div class="col-six${lied ? ' rejected' : ''}">
@@ -342,12 +365,19 @@ export const workerScopeHTML = ({ fp, note, count, modal, hashMini, hashSlice })
 			` ${note.unsupported}`
 		}</div>
 		<div class="help" title="OffscreenCanvasRenderingContext2D.measureText()">textMetrics: ${
-			!textMetrics ? note.blocked : getSum(Object.keys(textMetrics).map(key => textMetrics[key] || 0)) || note.blocked
+			!textMetrics ? note.blocked : modal(
+				'creep-worker-text-metrics',
+				`<div>system: ${textMetricsSystemSum}</div><br>` +
+				Object.keys(textMetrics).map(key => `<span>${key}: ${typeof textMetrics[key] == 'undefined' ? note.unsupported : textMetrics[key]}</span>`).join('<br>'),
+				systemTextMetricsClassIcon ? `${systemTextMetricsClassIcon}${textMetricsHash}` :
+					textMetricsHash
+			)	
 		}</div>
 		<div class="help" title="FontFaceSet.check()">fontFaceSet (${fontFaceSetFonts ? count(fontFaceSetFonts) : '0'}/${''+fontListLen}): ${
 			fontFaceSetFonts.length ? modal(
-				'creep-worker-fonts-check', fontFaceSetFonts.map(font => `<span style="font-family:'${font}'">${font}</span>`).join('<br>'),
-				systemClassIcon ? `${systemClassIcon}${fontFaceSetHash}` : fontFaceSetHash
+				'creep-worker-fonts-check', 
+				fontFaceSetFonts.map(font => `<span style="font-family:'${font}'">${font}</span>`).join('<br>'),
+				systemFontClassIcon ? `${systemFontClassIcon}${fontFaceSetHash}` : fontFaceSetHash
 			) : note.unsupported
 		}</div>
 		<div>keys (${count(scopeKeys)}): ${
@@ -383,7 +413,7 @@ export const workerScopeHTML = ({ fp, note, count, modal, hashMini, hashSlice })
 					` <span class="bold-fail">${locale}</span>`
 			}
 		</div>
-		<div>webgl:</div>
+		<div>gpu:</div>
 		<div class="block-text help" title="WebGLRenderingContext.getParameter()">
 			${webglVendor ? `${webglVendor}` : ''}
 			${webglRenderer ? `<br>${webglRenderer}` : note.unsupported}
@@ -394,7 +424,11 @@ export const workerScopeHTML = ({ fp, note, count, modal, hashMini, hashSlice })
 		<div class="block-text help" title="WorkerNavigator.deviceMemory\nWorkerNavigator.hardwareConcurrency\nWorkerNavigator.platform\nWorkerNavigator.userAgent">
 			${`${system}${platform ? ` (${platform})` : ''}`}
 			${device ? `<br>${device}` : note.blocked}
-			<br>cores: ${hardwareConcurrency}${deviceMemory ? `, memory: ${deviceMemory}` : ''}
+			${
+				hardwareConcurrency && deviceMemory ? `<br>cores: ${hardwareConcurrency}, memory: ${deviceMemory}` :
+				hardwareConcurrency && !deviceMemory ? `<br>cores: ${hardwareConcurrency}` :
+				!hardwareConcurrency && deviceMemory ? `<br>memory: ${deviceMemory}` : ''
+			}
 		</div>
 		<div>userAgent:</div>
 		<div class="block-text help" title="WorkerNavigator.userAgent">

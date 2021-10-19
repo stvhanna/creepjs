@@ -16,7 +16,9 @@ export const getPrediction = ({hash, data}) => {
 	const prediction = {
 		decrypted,
 		system: systems.length == 1 ? systems[0] : undefined,
-		device: devices.length == 1 ? devices[0] : getBaseDeviceName(devices),
+		device: (
+			devices.length == 1 ? devices[0] : getBaseDeviceName(devices)
+		),
 		gpu: gpus.length == 1 ? gpus[0] : undefined
 	}
 	return prediction
@@ -70,7 +72,7 @@ export const renderPrediction = ({decryptionData, patch, html, note, bot = false
 			/chrome os/i.test(system) ? iconSet.add('cros') && htmlIcon('cros') :
 			/linux/i.test(system) ? iconSet.add('linux') && htmlIcon('linux') :
 			/android/i.test(system) ? iconSet.add('android') && htmlIcon('android') :
-			/ipad|iphone|ipod|ios|mac/i.test(system) ? iconSet.add('apple') && htmlIcon('apple') :
+			/ipad|iphone|ipod|ios|mac|apple/i.test(system) ? iconSet.add('apple') && htmlIcon('apple') :
 			/windows/i.test(system) ? iconSet.add('windows') && htmlIcon('windows') : htmlIcon('')
 		)
 		const icons = [
@@ -82,13 +84,13 @@ export const renderPrediction = ({decryptionData, patch, html, note, bot = false
 		const renderBlankIfKnown = unknown ? ` ${note.unknown}` : ''
 		const renderIfKnown = unknown ? ` ${note.unknown}` : decrypted
 		return (
-			device ? `${icons}${title}<strong>*</strong>` :
+			device ? `<span class="help" title="${device}">${icons}${title}<strong>*</strong></span>` :
 				showVersion ? `${icons}${title}: ${renderIfKnown}` :
 					`${icons}${title}${renderBlankIfKnown}`
 		)
 	}
 
-	const unknownHTML = title => `${getBlankIcons()}${title} ${note.unknown}`
+	const unknownHTML = title => `${getBlankIcons()}${title}`
 	const devices = new Set([
 		(jsRuntime || {}).device,
 		(emojiSystem || {}).device,
@@ -105,83 +107,123 @@ export const renderPrediction = ({decryptionData, patch, html, note, bot = false
 	const getBaseDeviceName = devices => {
 		return devices.find(a => devices.filter(b => b.includes(a)).length == devices.length)
 	}
-	
-	const deviceName = getBaseDeviceName([...devices])
+	const getOldestWindowOS = devices => {
+		// FF RFP is ingnored in samples data since it returns Windows 10
+		// So, if we have multiples versions of Windows, the lowest is the most accurate
+		const windowsCore = (
+			devices.length == devices.filter(x => /windows/i.test(x)).length
+		)
+		if (windowsCore) {
+			return (
+				devices.includes('Windows 7') ? 'Windows 7' :
+				devices.includes('Windows 7 (64-bit)') ? 'Windows 7 (64-bit)' :
+				devices.includes('Windows 8') ? 'Windows 8' :
+				devices.includes('Windows 8 (64-bit)') ? 'Windows 8 (64-bit)' :
+				devices.includes('Windows 8.1') ? 'Windows 8.1' :
+				devices.includes('Windows 8.1 (64-bit)') ? 'Windows 8.1 (64-bit)' :
+				devices.includes('Windows 10') ? 'Windows 10' :
+				devices.includes('Windows 10 (64-bit)') ? 'Windows 10 (64-bit)' :
+					undefined
+			)
+		}
+		return undefined
+	}
+	const deviceCollection = [...devices]
+	const deviceName = (
+		getOldestWindowOS(deviceCollection) ||
+		getBaseDeviceName(deviceCollection)
+	)
 	const el = document.getElementById('browser-detection')
 	return patch(el, html`
 	<div class="flex-grid relative">
-		<div class="ellipsis">${
+		${
 			pendingReview ? `<span class="aside-note-bottom">pending review: <span class="renewed">${pendingReview}</span></span>` : ''
 		}
-		</div>
-		<div class="ellipsis">
-			<span class="aside-note"><span class="${bot ? 'renewed' : ''}">${bot ? 'magic' : ''}</span></span>
-		</div>
+		${
+			bot ? `<span class="aside-note"><span class="renewed">magic</span></span>` : ''
+		}
 		<div class="col-eight">
 			<strong>Prediction</strong>
-			<div>${deviceName ? `<strong>*</strong>${deviceName}` : getBlankIcons()}</div>
-			<div class="ellipsis">${
-				getTemplate({title: 'window object', agent: windowVersion, showVersion: true})
+			<div class="ellipsis relative">${
+				deviceName ? `<strong>*</strong>${deviceName}` : getBlankIcons()
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="window-entropy"></span>${
+				getTemplate({title: 'self', agent: windowVersion, showVersion: true})
+			}</div>
+			<div class="ellipsis relative">
+				<span id="style-entropy"></span>${
 				getTemplate({title: 'system styles', agent: styleSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="styleVersion-entropy"></span>${
 				getTemplate({title: 'computed styles', agent: styleVersion})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="html-entropy"></span>${
 				getTemplate({title: 'html element', agent: htmlVersion})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="math-entropy"></span>${
 				getTemplate({title: 'js runtime', agent: jsRuntime})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="error-entropy"></span>${
 				getTemplate({title: 'js engine', agent: jsEngine})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="emoji-entropy"></span>${
 				!Object.keys(emojiSystem || {}).length ? unknownHTML('emojis') : 
 					getTemplate({title: 'emojis', agent: emojiSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="audio-entropy"></span>${
 				!Object.keys(audioSystem || {}).length ? unknownHTML('audio') : 
 					getTemplate({title: 'audio', agent: audioSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="canvas-entropy"></span>${
 				!Object.keys(canvasSystem || {}).length ? unknownHTML('canvas') : 
 					getTemplate({title: 'canvas', agent: canvasSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="textMetrics-entropy"></span>${
 				!Object.keys(textMetricsSystem || {}).length ? unknownHTML('textMetrics') : 
 					getTemplate({title: 'textMetrics', agent: textMetricsSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="webgl-entropy"></span>${
 				!Object.keys(webglSystem || {}).length ? unknownHTML('webgl') : 
 					getTemplate({title: 'webgl', agent: webglSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="gpu-entropy"></span>${
 				!Object.keys(gpuSystem || {}).length ? unknownHTML('gpu') : 
 					getTemplate({title: 'gpu', agent: gpuSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="fonts-entropy"></span>${
 				!Object.keys(fontsSystem || {}).length ? unknownHTML('fonts') : 
 					getTemplate({title: 'fonts', agent: fontsSystem})
 			}</div>
-			<div class="ellipsis">${
+			<div class="ellipsis relative">
+				<span id="voices-entropy"></span>${
 				!Object.keys(voicesSystem || {}).length ? unknownHTML('voices') : 
 					getTemplate({title: 'voices', agent: voicesSystem})
 			}</div>
-			<div class="ellipsis">${
-				!Object.keys(screenSystem || {}).length || !screenSystem.system ? unknownHTML('screen') : 
+			<div class="ellipsis relative">
+				<span id="screen-entropy"></span>${
+				!Object.keys(screenSystem || {}).length ? unknownHTML('screen') : 
 					getTemplate({title: 'screen', agent: screenSystem})
 			}</div>
 		</div>
-		<div class="col-four icon-container">
+		<div class="col-four icon-prediction-container">
 			${[...iconSet].map(icon => {
-				return `<div class="icon-item ${icon}"></div>`
+				return `<div class="icon-prediction ${icon}"></div>`
 			}).join('')}
 			${
 				gpuSystem && ((''+gpuSystem.gpu) != 'undefined') ? 
-				`<div class="icon-item block-text-borderless">gpu:<br>${gpuSystem.gpu}</div>` : ''
+				`<div class="icon-prediction block-text-borderless">gpu:<br>${gpuSystem.gpu}</div>` : ''
 			}
 		</div>
 	</div>
@@ -212,7 +254,7 @@ export const predictionErrorPatch = ({error, patch, html}) => {
 				<div>${getBlankIcons()}voices</div>
 				<div>${getBlankIcons()}screen</div>
 			</div>
-			<div class="col-four icon-container">
+			<div class="col-four icon-prediction-container">
 			</div>
 		</div>
 	`)

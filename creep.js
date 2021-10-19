@@ -28,7 +28,7 @@ import { getBestWorkerScope, workerScopeHTML } from './modules/worker.js'
 import { getSVG, svgHTML } from './modules/svg.js'
 import { getResistance, resistanceHTML } from './modules/resistance.js'
 import { getIntl, intlHTML } from './modules/intl.js'
-import { getCSSFeaturesLie, getEngineFeatures, featuresHTML } from './modules/features.js'
+import { getFeaturesLie, getEngineFeatures, featuresHTML } from './modules/features.js'
 import { renderSamples } from './modules/samples.js'
 import { getPrediction, renderPrediction, predictionErrorPatch } from './modules/prediction.js'
 
@@ -240,25 +240,25 @@ const imports = {
 		] = await Promise.all([
 			hashify(windowFeaturesComputed),
 			hashify(headlessComputed),
-			hashify(htmlElementVersionComputed.keys),
+			hashify((htmlElementVersionComputed || {}).keys),
 			hashify(cssMediaComputed),
 			hashify(cssComputed),
-			hashify(cssComputed.computedStyle),
-			hashify(cssComputed.system),
+			hashify((cssComputed || {}).computedStyle),
+			hashify((cssComputed || {}).system),
 			hashify(screenComputed),
 			hashify(voicesComputed),
 			hashify(canvas2dComputed),
-			hashify(canvas2dComputed.dataURI),
+			hashify((canvas2dComputed || {}).dataURI),
 			hashify(canvasWebglComputed),
-			hashify(canvasWebglComputed.dataURI),
+			hashify((canvasWebglComputed || {}).dataURI),
 			hashify(reducedGPUParameters),
 			caniuse(() => canvasWebglComputed.pixels.length) ? hashify(canvasWebglComputed.pixels) : undefined,
 			caniuse(() => canvasWebglComputed.pixels2.length) ? hashify(canvasWebglComputed.pixels2) : undefined,
-			hashify(mathsComputed.data),
-			hashify(consoleErrorsComputed.errors),
+			hashify((mathsComputed || {}).data),
+			hashify((consoleErrorsComputed || {}).errors),
 			hashify(timezoneComputed),
 			hashify(clientRectsComputed),
-			hashify(clientRectsComputed.emojiSet),
+			hashify((clientRectsComputed || {}).emojiSet),
 			hashify(offlineAudioContextComputed),
 			hashify(fontsComputed),
 			hashify(workerScopeComputed),
@@ -643,7 +643,7 @@ const imports = {
 			<div class="col-eight">
 				<strong>Loading...</strong>
 				<div>${getBlankIcons()}</div>
-				<div>${getBlankIcons()}window object:</div>
+				<div>${getBlankIcons()}self:</div>
 				<div>${getBlankIcons()}system styles</div>
 				<div>${getBlankIcons()}computed styles</div>
 				<div>${getBlankIcons()}html element</div>
@@ -659,7 +659,7 @@ const imports = {
 				<div>${getBlankIcons()}voices</div>
 				<div>${getBlankIcons()}screen</div>
 			</div>
-			<div class="col-four icon-container">
+			<div class="col-four icon-prediction-container">
 			</div>
 		</div>
 		<div id="headless-resistance-detection-results" class="flex-grid">
@@ -716,8 +716,6 @@ const imports = {
 		</div>
 	</div>
 	`, () => {
-
-		renderSamples(templateImports)
 
 		// fetch fingerprint data from server
 		const id = 'creep-browser'
@@ -820,7 +818,7 @@ const imports = {
 				}</span>`
 			}
 
-			const renewedDate = '2021-8-27'
+			const renewedDate = '8/27/2021'
 			const addDays = (date, n) => {
 				const d = new Date(date)
 				d.setDate(d.getDate() + n)
@@ -834,7 +832,7 @@ const imports = {
 
 			// Bot Detection
 			const getBot = ({ fp, hours, hasLied, switchCount }) => {
-				const userAgentReportIsOutsideOfCSSVersion = getCSSFeaturesLie(fp)
+				const userAgentReportIsOutsideOfFeaturesVersion = getFeaturesLie(fp)
 				const userShouldGetThrottled = (switchCount > 20) && ((hours/switchCount) <= 7) // 
 				const excessiveLooseFingerprints = hasLied && userShouldGetThrottled
 				const workerScopeIsTrashed = !fp.workerScope || !fp.workerScope.userAgent
@@ -842,7 +840,7 @@ const imports = {
 				// Patern conditions that warrant rejection
 				const botPatterns = {
 					excessiveLooseFingerprints,
-					userAgentReportIsOutsideOfCSSVersion,
+					userAgentReportIsOutsideOfFeaturesVersion,
 					workerScopeIsTrashed,
 					liedWorkerScope
 				}
@@ -1030,10 +1028,60 @@ const imports = {
 			const valuesHash = hashMini(audioValues)
 			const audioMetrics = `${sampleSum}_${gain}_${freqSum}_${timeSum}_${valuesHash}`
 
-			if (isBot) {
-				// Perform Dragon Fire Magic
-				const webapp = 'https://script.google.com/macros/s/AKfycbw26MLaK1PwIGzUiStwweOeVfl-sEmIxFIs5Ax7LMoP1Cuw-s0llN-aJYS7F8vxQuVG-A/exec'
-				const decryptionResponse = await fetch(webapp)
+			if (!isBot) {
+				const sender = {
+					e: 3.141592653589793 ** -100,
+					l: +new Date(new Date(`7/1/1113`))
+				}
+				
+				const decryptRequest = `https://creepjs-6bd8e.web.app/decrypt?${[
+					`sender=${sender.e}_${sender.l}`,
+					`isTorBrowser=${isTorBrowser}`,
+					`isRFP=${isRFP}`,
+					`isBrave=${isBrave}`,
+					`mathId=${maths.$hash}`,
+					`errorId=${consoleErrors.$hash}`,
+					`htmlId=${htmlElementVersion.$hash}`,
+					`winId=${windowFeatures.$hash}`,
+					`styleId=${styleHash}`,
+					`styleSystemId=${styleSystemHash}`,
+					`emojiId=${!clientRects || clientRects.lied ? 'undefined' : emojiHash}`,
+					`audioId=${
+							!offlineAudioContext ||
+							offlineAudioContext.lied ||
+							unknownFirefoxAudio ? 'undefined' : 
+								audioMetrics
+					}`,
+					`canvasId=${
+						!canvas2d || canvas2d.lied ? 'undefined' :
+							canvas2dImageHash
+					}`,
+					`textMetricsId=${
+						!canvas2d || canvas2d.liedTextMetrics || ((+canvas2d.textMetricsSystemSum) == 0) ? 'undefined' : 
+							canvas2d.textMetricsSystemSum
+					}`,
+					`webglId=${
+						!canvasWebgl || (canvas2d || {}).lied || canvasWebgl.lied ? 'undefined' :
+							canvasWebglImageHash
+					}`,
+					`gpuId=${
+						!canvasWebgl || canvasWebgl.parameterOrExtensionLie ? 'undefined' :
+							canvasWebglParametersHash
+					}`,
+					`gpu=${
+						!canvasWebgl || canvasWebgl.parameterOrExtensionLie ? 'undefined' : (
+							(fp.workerScope && (fp.workerScope.type != 'dedicated') && fp.workerScope.webglRenderer) ? encodeURIComponent(fp.workerScope.webglRenderer) :
+								(canvasWebgl.parameters && !isBravePrivacy) ? encodeURIComponent(canvasWebgl.parameters.UNMASKED_RENDERER_WEBGL) : 
+									'undefined'
+						)
+					}`,
+					`fontsId=${!fonts || fonts.lied ? 'undefined' : fonts.$hash}`,
+					`voicesId=${!voices || voices.lied ? 'undefined' : voices.$hash}`,
+					`screenId=${screenMetrics}`,
+					`ua=${encodeURIComponent(fp.workerScope.userAgent)}`
+				].join('&')}`
+
+				const decryptionResponse = await fetch(decryptRequest)
 					.catch(error => {
 						console.error(error)
 						predictionErrorPatch({error, patch, html})
@@ -1042,48 +1090,73 @@ const imports = {
 				if (!decryptionResponse) {
 					return
 				}
-				const decryptionSamples = await decryptionResponse.json()
-			
-				const {
-					window: winSamples,
-					math: mathSamples,
-					error: errorSamples,
-					html: htmlSamples,
-					style: styleSamples,
-					styleVersion: styleVersionSamples,
-					audio: audioSamples,
-					emoji: emojiSamples,
-					canvas: canvasSamples,
-					textMetrics: textMetricsSamples,
-					webgl: webglSamples,
-					fonts: fontsSamples,
-					voices: voicesSamples,
-					screen: screenSamples,
-					gpu: gpuSamples,
-				} = decryptionSamples || {}
+				const decryptionData = await decryptionResponse.json()
+				renderPrediction({
+					decryptionData,
+					patch,
+					html,
+					note
+				})
+			}
+		
 
+			// get GCD Samples
+			const webapp = 'https://script.google.com/macros/s/AKfycbw26MLaK1PwIGzUiStwweOeVfl-sEmIxFIs5Ax7LMoP1Cuw-s0llN-aJYS7F8vxQuVG-A/exec'
+			const decryptionResponse = await fetch(webapp)
+				.catch(error => {
+					console.error(error)
+					return
+				})
+			const decryptionSamples = (
+				decryptionResponse ? await decryptionResponse.json() : undefined
+			)
+
+			const {
+				window: winSamples,
+				math: mathSamples,
+				error: errorSamples,
+				html: htmlSamples,
+				style: styleSamples,
+				styleVersion: styleVersionSamples,
+				audio: audioSamples,
+				emoji: emojiSamples,
+				canvas: canvasSamples,
+				textMetrics: textMetricsSamples,
+				webgl: webglSamples,
+				fonts: fontsSamples,
+				voices: voicesSamples,
+				screen: screenSamples,
+				gpu: gpuSamples,
+			} = decryptionSamples || {}
+
+			if (isBot && !decryptionSamples) {
+				predictionErrorPatch({error: 'Failed prediction fetch', patch, html})
+			}
+			
+			if (isBot && decryptionSamples) {
+				// Perform Dragon Fire Magic
 				const decryptionData = {
-					windowVersion: getPrediction({ hash: windowFeatures.$hash, data: winSamples }),
-					jsRuntime: getPrediction({ hash: maths.$hash, data: mathSamples }),
-					jsEngine: getPrediction({ hash: consoleErrors.$hash, data: errorSamples }),
-					htmlVersion: getPrediction({ hash: htmlElementVersion.$hash, data: htmlSamples }),
+					windowVersion: getPrediction({ hash: (windowFeatures || {}).$hash, data: winSamples }),
+					jsRuntime: getPrediction({ hash: (maths || {}).$hash, data: mathSamples }),
+					jsEngine: getPrediction({ hash: (consoleErrors || {}).$hash, data: errorSamples }),
+					htmlVersion: getPrediction({ hash: (htmlElementVersion || {}).$hash, data: htmlSamples }),
 					styleVersion: getPrediction({ hash: styleHash, data: styleVersionSamples }),
 					styleSystem: getPrediction({ hash: styleSystemHash, data: styleSamples }),
 					emojiSystem: getPrediction({ hash: emojiHash, data: emojiSamples }),
 					audioSystem: getPrediction({ hash: audioMetrics, data: audioSamples }),
 					canvasSystem: getPrediction({ hash: canvas2dImageHash, data: canvasSamples }),
 					textMetricsSystem: getPrediction({
-						hash: canvas2d.textMetricsSystemSum,
+						hash: (canvas2d || {}).textMetricsSystemSum,
 						data: textMetricsSamples
 					}),
 					webglSystem: getPrediction({ hash: canvasWebglImageHash, data: webglSamples }),
 					gpuSystem: getPrediction({ hash: canvasWebglParametersHash, data: gpuSamples }),
-					fontsSystem: getPrediction({ hash: fonts.$hash, data: fontsSamples }),
-					voicesSystem: getPrediction({ hash: voices.$hash, data: voicesSamples }),
+					fontsSystem: getPrediction({ hash: (fonts || {}).$hash, data: fontsSamples }),
+					voicesSystem: getPrediction({ hash: (voices || {}).$hash, data: voicesSamples }),
 					screenSystem: getPrediction({ hash: screenMetrics, data: screenSamples })
 				}
 
-				return renderPrediction({
+				renderPrediction({
 					decryptionData,
 					patch,
 					html,
@@ -1091,75 +1164,90 @@ const imports = {
 					bot: true
 				})
 			}
-
-			const sender = {
-				e: 3.141592653589793 ** -100,
-				l: +new Date(new Date(`7/1/1113`))
+			
+			// render entropy notes
+			if (decryptionSamples) {
+				const getEntropy = (hash, data) => {
+					let classTotal = 0
+					const metricTotal = Object.keys(data)
+						.reduce((acc, key) => acc+= data[key].length, 0)
+					const decryption = Object.keys(data).find(key => data[key].find(item => {
+						if (!(item.id == hash)) {
+							return false
+						}
+						classTotal = data[key].length
+						return true
+					}))
+					return {
+						classTotal,
+						decryption,
+						metricTotal
+					}
+				}
+				const entropyHash = {
+					window: (windowFeatures || {}).$hash,
+					math: (maths || {}).$hash,
+					error: (consoleErrors || {}).$hash,
+					html: (htmlElementVersion || {}).$hash,
+					style: styleSystemHash,
+					styleVersion: styleHash,
+					audio: audioMetrics,
+					emoji: emojiHash,
+					canvas: canvas2dImageHash,
+					textMetrics: (canvas2d || {}).textMetricsSystemSum,
+					webgl: canvasWebglImageHash,
+					fonts: (fonts || {}).$hash,
+					voices: (voices || {}).$hash,
+					screen: screenMetrics,
+					gpu: canvasWebglParametersHash,
+				}
+				const entropyDescriptors = {
+					window: 'window object',
+					math: 'engine math runtime',
+					error: 'engine console errors',
+					html: 'html element',
+					style: 'system styles',
+					styleVersion: 'computed styles',
+					audio: 'audio metrics',
+					emoji: 'domrect emojis',
+					canvas: 'canvas image',
+					textMetrics: 'textMetrics',
+					webgl: 'webgl image',
+					fonts: 'system fonts',
+					voices: 'voices',
+					screen: 'screen metrics',
+					gpu: 'webgl parameters',
+				}
+				Object.keys(decryptionSamples).forEach((key,i) => {
+					const {
+						classTotal,
+						decryption,
+						metricTotal
+					} = getEntropy(entropyHash[key], decryptionSamples[key])
+					const el = document.getElementById(`${key}-entropy`)
+					const engineMetric = (
+						(key == 'screen') || (key == 'fonts')
+					)
+					const total = (
+						engineMetric ? metricTotal : classTotal
+					)
+					const uniquePercent = !total ? 0 : (1/total)*100
+					const signal = (
+						uniquePercent == 0 ? 'entropy-unknown' :
+						uniquePercent < 1 ? 'entropy-high' :
+						uniquePercent > 10 ? 'entropy-low' :
+							''
+					)
+					const animate = `style="animation: fade-up .3s ${100*i}ms ease both;"`
+					return patch(el, html`
+						<span ${animate} class="${signal} entropy-note help" title="1 of ${total || Infinity}${engineMetric ? ' in x' : ` in ${decryption || 'unknown'}`}${` (${entropyDescriptors[key]})`}">
+							${(uniquePercent).toFixed(2)}%
+						</span>
+					`)
+				})
 			}
 			
-			const decryptRequest = `https://creepjs-6bd8e.web.app/decrypt?${[
-				`sender=${sender.e}_${sender.l}`,
-				`isTorBrowser=${isTorBrowser}`,
-				`isRFP=${isRFP}`,
-				`isBrave=${isBrave}`,
-				`mathId=${maths.$hash}`,
-				`errorId=${consoleErrors.$hash}`,
-				`htmlId=${htmlElementVersion.$hash}`,
-				`winId=${windowFeatures.$hash}`,
-				`styleId=${styleHash}`,
-				`styleSystemId=${styleSystemHash}`,
-				`emojiId=${!clientRects || clientRects.lied ? 'undefined' : emojiHash}`,
-				`audioId=${
-						!offlineAudioContext ||
-						offlineAudioContext.lied ||
-						unknownFirefoxAudio ? 'undefined' : 
-							audioMetrics
-				}`,
-				`canvasId=${
-					!canvas2d || canvas2d.lied ? 'undefined' :
-						canvas2dImageHash
-				}`,
-				`textMetricsId=${
-					!canvas2d || canvas2d.liedTextMetrics || ((+canvas2d.textMetricsSystemSum) == 0) ? 'undefined' : 
-						canvas2d.textMetricsSystemSum
-				}`,
-				`webglId=${
-					!canvasWebgl || (canvas2d || {}).lied || canvasWebgl.lied ? 'undefined' :
-						canvasWebglImageHash
-				}`,
-				`gpuId=${
-					!canvasWebgl || canvasWebgl.parameterOrExtensionLie ? 'undefined' :
-						canvasWebglParametersHash
-				}`,
-				`gpu=${
-					!canvasWebgl || canvasWebgl.parameterOrExtensionLie ? 'undefined' : (
-						(fp.workerScope && (fp.workerScope.type != 'dedicated') && fp.workerScope.webglRenderer) ? encodeURIComponent(fp.workerScope.webglRenderer) :
-							(canvasWebgl.parameters && !isBravePrivacy) ? encodeURIComponent(canvasWebgl.parameters.UNMASKED_RENDERER_WEBGL) : 
-								'undefined'
-					)
-				}`,
-				`fontsId=${!fonts || fonts.lied ? 'undefined' : fonts.$hash}`,
-				`voicesId=${!voices || voices.lied ? 'undefined' : voices.$hash}`,
-				`screenId=${screenMetrics}`,
-				`ua=${encodeURIComponent(fp.workerScope.userAgent)}`
-			].join('&')}`
-
-			const decryptionResponse = await fetch(decryptRequest)
-				.catch(error => {
-					console.error(error)
-					predictionErrorPatch({error, patch, html})
-					return
-				})
-			if (!decryptionResponse) {
-				return
-			}
-			const decryptionData = await decryptionResponse.json()
-			return renderPrediction({
-				decryptionData,
-				patch,
-				html,
-				note
-			})
+			return renderSamples({ samples: decryptionSamples, templateImports })
 		})
 		.catch(error => {
 			fetchVisitorDataTimer('Error fetching vistor data')
@@ -1173,7 +1261,7 @@ const imports = {
 					<div class="col-eight">
 						${error}
 					</div>
-					<div class="col-four icon-container">
+					<div class="col-four icon-prediction-container">
 					</div>
 				</div>
 			`)

@@ -294,7 +294,7 @@ export const getCanvas2d = async imports => {
 		const dataLie = lieProps['HTMLCanvasElement.toDataURL']
 		const contextLie = lieProps['HTMLCanvasElement.getContext']
 		const imageDataLie = lieProps['CanvasRenderingContext2D.getImageData']
-		const textMetricsLie = (
+		let textMetricsLie = (
 			lieProps['CanvasRenderingContext2D.measureText'] ||
 			lieProps['TextMetrics.actualBoundingBoxAscent'] ||
 			lieProps['TextMetrics.actualBoundingBoxDescent'] ||
@@ -438,6 +438,36 @@ export const getCanvas2d = async imports => {
 			documentLie(`CanvasRenderingContext2D.getImageData`, iframeLie)
 		}
 
+		const getTextMetricsFloatLie = context => {
+			const isFloat = n => n % 1 !== 0
+			const {
+				actualBoundingBoxAscent: abba,
+				actualBoundingBoxDescent: abbd,
+				actualBoundingBoxLeft: abbl,
+				actualBoundingBoxRight: abbr,
+				fontBoundingBoxAscent: fbba,
+				fontBoundingBoxDescent: fbbd,
+				width: w
+			} = context.measureText('') || {}
+			const lied = [
+				abba,
+				abbd,
+				abbl,
+				abbr,
+				fbba,
+				fbbd
+			].find(x => isFloat((x || 0)))
+			return lied
+		}
+		if (getTextMetricsFloatLie(context)) {
+			textMetricsLie = true
+			lied = true
+			documentLie(
+				'CanvasRenderingContext2D.measureText',
+				'metric noise detected'
+			)
+		}
+
 		logTestResult({ start, test: 'canvas 2d', passed: true })
 		return {
 			dataURI,
@@ -468,7 +498,7 @@ export const canvasHTML = ({ fp, note, modal, getMismatchStyle, hashMini, hashSl
 			<div>data: ${note.blocked}</div>
 			<div>textMetrics: ${note.blocked}</div>
 			<div>pixel trap:</div>
-			<div class="icon-container pixels">${note.blocked}</div>
+			<div class="icon-pixel-container pixels">${note.blocked}</div>
 		</div>`
 	}
 			
@@ -523,7 +553,7 @@ export const canvasHTML = ({ fp, note, modal, getMismatchStyle, hashMini, hashSl
 	}
 	const { isPointInPath, isPointInStroke } = points || {}
 	const dataTemplate = `
-		${dataURI ? `<div class="icon-item canvas-data"></div>` : ''}
+		${dataURI ? `<div class="icon-pixel canvas-data"></div>` : ''}
 		<br>toDataURL: ${!dataURI ? note.blocked : hash.dataURI}
 		<br>getImageData: ${!imageData ? note.blocked : hashMini(imageData)}
 		<br>isPointInPath: ${!isPointInPath ? note.blocked : hashMini(isPointInPath)}
@@ -629,9 +659,9 @@ export const canvasHTML = ({ fp, note, modal, getMismatchStyle, hashMini, hashSl
 			)	
 		}</div>
 		<div class="help" title="CanvasRenderingContext2D.getImageData()">pixel trap: ${rgba ? `${modPercent}% rgba noise ${rgbaHTML}` : ''}</div>
-		<div class="icon-container pixels">
-			<div class="icon-item pixel-image-random"></div>
-			${rgba ? `<div class="icon-item pixel-image"></div>` : ''}
+		<div class="icon-pixel-container pixels">
+			<div class="icon-pixel pixel-image-random"></div>
+			${rgba ? `<div class="icon-pixel pixel-image"></div>` : ''}
 		</div>
 	</div>
 	`

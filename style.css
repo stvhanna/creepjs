@@ -192,7 +192,6 @@ visitor {
     padding: 5px;
     text-align: center;
     align-items: center;
-    min-height: 85px;
     border-radius: 3px;
     margin: 5px auto;
 	border: none;
@@ -204,13 +203,33 @@ visitor {
 }
 
 .time,
-.aside-note {
+.aside-note,
+.entropy-note {
 	position: absolute;
 	top: 0;
     right: 25px;
 	font-size: 12px !important;
-	color: #bbb;
+}
+.aside-note {
 	background: #fff;
+	color: #bbb;
+}
+.entropy-note {
+	background: #6666661f;
+    padding: 0px 10px;
+    border-radius: 2px;
+}
+.entropy-high {
+	background: #f5567b1f;
+	color: #ce4867;
+}
+.entropy-low {
+	background: #56f5df1f;
+	color: #399a8d;
+}
+.entropy-unknown {
+	background: #f5567b52;
+    color: #ce4867;
 }
 
 .aside-note-bottom {
@@ -620,7 +639,8 @@ input[type="radio"] {
 }
 
 .icon,
-.icon-item {
+.icon-prediction,
+.icon-pixel  {
 	background-position: center;
   	background-repeat: no-repeat;
   	background-size: contain;
@@ -631,17 +651,29 @@ input[type="radio"] {
     height: 1em;
     margin-right: 3px;
 }
-.icon-container {
-	min-height: 85px;
+.icon-prediction-container,
+.icon-pixel-container {
     display: flex;
     flex-direction: row;
 	flex-wrap: wrap;
     justify-content: space-around;
 	align-items: center;
 }
-.icon-item {
+.icon-prediction-container {
+	min-height: 365px;
+}
+.icon-pixel-container {
+	min-height: 85px;
+}
+.icon-prediction,
+.icon-pixel {
     flex: 1 0 auto;
     width: 50%;
+}
+.icon-prediction {
+	height: 55px;
+}
+.icon-pixel {
 	height: 75px;
 }
 
@@ -706,6 +738,22 @@ input[type="radio"] {
 		color: var(--light-grey);
 	}
 
+	.entropy-note {
+		background: #6666661f;
+	}
+	.entropy-high {
+		background: #f5567b1f;
+		color: #d68c9d;
+	}
+	.entropy-low {
+		background: #56f5df1f;
+		color: #63bdb1;
+	}
+	.entropy-unknown {
+		background: #f5567b52;
+		color: #fff;
+	}
+
 	#fingerprint-data .block-text,
 	#fingerprint-data .blocked,
 	.main-hash,
@@ -722,9 +770,12 @@ input[type="radio"] {
 		box-shadow: none;
 	}
 
-	.modal-content,
-	#fingerprint-data .block-text {
+	.modal-content {
 		border: 1px solid var(--light-grey);
+	}
+	#fingerprint-data .block-text {
+		border: 1px solid #ffffff12;
+    	box-shadow: 0px 2px 0px 0px #ffffff17;
 	}
 
 	.sub-hash,

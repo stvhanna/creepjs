@@ -1,11 +1,11 @@
 (async () => {
 
-	const hashMini = str => {
-		const json = `${JSON.stringify(str)}`
-		let i, len, hash = 0x811c9dc5
-		for (i = 0, len = json.length; i < len; i++) {
-			hash = Math.imul(31, hash) + json.charCodeAt(i) | 0
-		}
+	const hashMini =  x => {
+		if (!x) return x
+		const json = `${JSON.stringify(x)}`
+		const hash = json.split('').reduce((hash, char, i) => {
+			return Math.imul(31, hash) + json.charCodeAt(i) | 0
+		}, 0x811c9dc5)
 		return ('0000000' + (hash >>> 0).toString(16)).substr(-8)
 	}
 
@@ -18,30 +18,12 @@
 		return hashHex
 	}
 
-	// ie11 fix for template.content
-	function templateContent(template) {
-		// template {display: none !important} /* add css if template is in dom */
-		if ('content' in document.createElement('template')) {
-			return document.importNode(template.content, true)
-		} else {
-			const frag = document.createDocumentFragment()
-			const children = template.childNodes
-			for (let i = 0, len = children.length; i < len; i++) {
-				frag.appendChild(children[i].cloneNode(true))
-			}
-			return frag
-		}
-	}
-
-	// tagged template literal (JSX alternative)
-	const patch = (oldEl, newEl, fn = null) => {
-		oldEl.parentNode.replaceChild(newEl, oldEl)
-		return typeof fn === 'function' ? fn() : true
-	}
-	const html = (stringSet, ...expressionSet) => {
+	// template views
+	const patch = (oldEl, newEl) => oldEl.parentNode.replaceChild(newEl, oldEl)
+	const html = (str, ...expressionSet) => {
 		const template = document.createElement('template')
-		template.innerHTML = stringSet.map((str, i) => `${str}${expressionSet[i] || ''}`).join('')
-		return templateContent(template) // ie11 fix for template.content
+		template.innerHTML = str.map((s, i) => `${s}${expressionSet[i] || ''}`).join('')
+		return document.importNode(template.content, true)
 	}
 
 	const poly = `const poly = {

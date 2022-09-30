@@ -1,154 +1,278 @@
 (async () => {
 
-const hashMini = str => {
-	const json = `${JSON.stringify(str)}`
-	let i, len, hash = 0x811c9dc5
-	for (i = 0, len = json.length; i < len; i++) {
-		hash = Math.imul(31, hash) + json.charCodeAt(i) | 0
-	}
+const hashMini =  x => {
+	if (!x) return x
+	const json = `${JSON.stringify(x)}`
+	const hash = json.split('').reduce((hash, char, i) => {
+		return Math.imul(31, hash) + json.charCodeAt(i) | 0
+	}, 0x811c9dc5)
 	return ('0000000' + (hash >>> 0).toString(16)).substr(-8)
 }
 
-// ie11 fix for template.content
-function templateContent(template) {
-	// template {display: none !important} /* add css if template is in dom */
-	if ('content' in document.createElement('template')) {
-		return document.importNode(template.content, true)
-	} else {
-		const frag = document.createDocumentFragment()
-		const children = template.childNodes
-		for (let i = 0, len = children.length; i < len; i++) {
-			frag.appendChild(children[i].cloneNode(true))
-		}
-		return frag
-	}
-}
-
-// tagged template literal (JSX alternative)
-const patch = (oldEl, newEl, fn = null) => {
-	oldEl.parentNode.replaceChild(newEl, oldEl)
-	return typeof fn === 'function' ? fn() : true
-}
-const html = (stringSet, ...expressionSet) => {
+// template views
+const patch = (oldEl, newEl) => oldEl.parentNode.replaceChild(newEl, oldEl)
+const html = (str, ...expressionSet) => {
 	const template = document.createElement('template')
-	template.innerHTML = stringSet.map((str, i) => `${str}${expressionSet[i] || ''}`).join('')
-	return templateContent(template) // ie11 fix for template.content
+	template.innerHTML = str.map((s, i) => `${s}${expressionSet[i] || ''}`).join('')
+	return document.importNode(template.content, true)
 }
 
-
-const getFile = async (id, path) => {
-	if (!('chrome' in window)) {
-		return false
-	}
-	const res = await fetch(`chrome-extension://${id}/${path}`)
-	.then(() => path) 
-	.catch(error => false)
-	return res
-}
-
-const extension = {
-	googleTranslate: {
-		active: false,
-		id: 'aapbdbdomjkkjkaonfhkkikfgjllcleb',
-		filePaths: [ 'popup_css_compiled.css', 'options.html' ]
-	},
-	metamask: {
-		active: false,
-		id: 'nkbihfbeogaeaoehlefnkodbefgpgknn',
-		filePaths: [ 'inpage.js', 'phishing.html' ]
-	},
-	trace: {
-		active: false,
-		id: 'njkmjblmcfiobddjgebnoeldkjcplfjb',
-		filePaths: [
-			'html/blocked.html',
-			'js/pages/blocked.js',
-			'js/common/ux.js',
-			'js/common/shared.js',
-			'js/libraries/jquery.js'
-		]
-	},
-	cydec: {
-		active: false,
-		id: 'becfjfjckdhngmmpkhakoknnkgpgfelk'
-	}
-}
 
 // metamask
-const metamaskFiles = await Promise.all(
-	extension.metamask.filePaths.map(path => getFile(extension.metamask.id, path))
-)
-if (!!metamaskFiles.filter(file => !!file).length) {
-	console.log('metamask files detected')
-	extension.metamask.active ||= true
-}
 if ('web3' in window && web3.currentProvider.isMetaMask) {
 	console.log('metamask web3 detected')
-	extension.metamask.active ||= true
 }
 
-// google translate
-const googleTranslateFiles = await Promise.all(
-	extension.googleTranslate.filePaths.map(path => getFile(extension.googleTranslate.id, path))
-)
-if (!!googleTranslateFiles.filter(file => !!file).length) {
-	console.log('googleTranslate files detected')
-	extension.googleTranslate.active ||= true
-}
+/* 
+	source viewer:
+	https://chrome.google.com/webstore/detail/chrome-extension-source-v/jifpbeccnghkjeaalbbjmodiffmgedin
 
-// trace
-const traceFiles = await Promise.all(
-	extension.trace.filePaths.map(path => getFile(extension.trace.id, path))
-)
-if (!!traceFiles.filter(file => !!file).length) {
-	console.log('trace files detected')
-	extension.trace.active ||= true
-}
-
-if (!!Object.getOwnPropertyNames(window)
-	.filter(prop => /^tp_.+_func$/.test(prop)).length) {
-	console.log('trace window detected')
-	extension.trace.active ||= true
-}
-
-// cydec
-if (!!Object.getOwnPropertyNames(window)
-	.filter(prop => /^hdcd_(date_(ts|js|gt|ms|ls|ds|zo|pr|tz)|canvas_getctx)$/.test(prop)).length) {
-	console.log('cydec window detected')
-	extension.cydec.active ||= true
-}
-
-// trap logs
-const old = console.log
-console.log = function log() {
-	if (/possible fingerprinting detected/i.test(arguments[0])) {
-		console.log('cydec console detected')
-		extension.cydec.active ||= true
-	}
-	this.apply(console, arguments)
-}.bind(console.log)
-navigator.userAgent // trigger
-//console.log = old // restore
-
-/*
-// trap messages
-const oldSend = chrome.runtime.sendMessage
-await new Promise(resolve => {
-	chrome.runtime.sendMessage = function sendMessage() {
-		console.log(arguments)
-		if (arguments[0] == extension.cydec.id) {
-			console.log('cydec message detected')
-			resolve(extension.cydec.active ||= true)
+	query ids from store collections:
+	x = [...document.querySelectorAll('.webstore-test-wall-tile a')].map(el => {
+		const { href } = el
+		const id = /[^\/]+$/.exec(href)[0]
+		const name = el.querySelector('div > div:nth-of-type(2) > div:nth-of-type(3) > h3').innerText
+		return {
+			id,
+			name
 		}
-		this.apply(chrome.runtime, arguments)
-	}.bind(chrome.runtime.sendMessage)
-})
-//chrome.runtime.sendMessage = oldSend // restore
+	}).reduce((acc, obj) => {
+		if (!acc[obj.id]) {
+			acc[obj.id] = { name: obj.name, file: '' }
+			return acc
+		}
+		return acc
+	},{})
+	console.log(JSON.stringify(x, null, '\t'))
+
+	query on single page:
+	console.log(
+		JSON.stringify({
+			[/[^\/]+$/.exec(location.href)[0]]: { name: document.querySelector('body div div > h1').innerText, file: '' }
+		}, null, '\t')
+	)
+
+	do:
+	Bitwarden
+
+	Adobe Acrobat
+	Tampermonkey
+	Pinterest Save Button
+	Cisco Webex
+	Skype
+	Honey
+
 */
 
-console.log(`googleTranslate: ${extension.googleTranslate.active}`)
-console.log(`metamask: ${extension.metamask.active}`)
-console.log(`trace: ${extension.trace.active}`)
-console.log(`cydec: ${extension.cydec.active}`)
+// https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/web_accessible_resources
+// https://developer.chrome.com/docs/extensions/mv3/manifest/web_accessible_resources/
+const getExtensions = () => ({
+
+	// Office
+	"kbfnbcaeplbcioakkpcpgfkobkghlhen": {
+		"name": "Grammarly",
+		"file": "src/css/Grammarly.styles.css"
+	},
+	"kgjfgplpablkjnlkjmjdecgdpfankdle": {
+		"name": "Zoom Scheduler",
+		"file": "images/icon.svg"
+	},
+	"liecbddmkiiihnedobmlmillhodjkdmb": {
+		"name": "Loom",
+		"file": "img/arrow.svg"
+	},
+	"efaidnbmnnnibpcajpcglclefindmkaj": {
+		"name": "Adobe Acrobat",
+		"file": "viewer.html"
+	},
+	"oeopbcgkkoapgobdbedcemjljbihmemj": {
+		"name": "Checker Plus for Gmail",
+		"file": "images/search.png"
+	},
+	
+	// Shopping
+	"eofcbnmajmjmplflapaojjnihcjkigck": {
+		"name": "Avast SafePrice",
+		"file": "common/ui/fonts/fonts.css"
+	},
+	"chhjbpecpncaggjpdakmflnfcopglcmi": {
+		"name": "Rakuten",
+		"file": "img/rakuten/icon-rakuten.svg"
+	},
+	"nenlahapcbofgnanklpelkaejcehkggg": {
+		"name": "Capital One Shopping",
+		"file": "assets/icons/shopping-icon16.png"
+	},
+	"bmnlcjabgnpnenekpadlanbbkooimhnj": {
+		"name": "Honey",
+		"file": "paypal/meta.js"
+	},
+	"hfapbcheiepjppjbnkphkmegjlipojba": {
+		"name": "Klarna",
+		"file": "_locales/en_US/messages.json"
+	},
+
+	// Google
+	"aapbdbdomjkkjkaonfhkkikfgjllcleb": {
+		"name": "Google Translate",
+		"file": "popup_css_compiled.css"
+	},
+	"lpcaedmchfhocbbapmcbpinfpgnhiddi": {
+		"name": "Google Keep",
+		"file": "i18n/symbols_ar.js"
+	},
+	"gbkeegbaiigmenfmjfclcdgdpimamgkj": {
+		"name": "Office Editing for Docs, Sheets & Slides",
+		"file": "views/app.html"
+	},
+	"gmbmikajjgmnabiglmofipeabaddhgne": {
+		"name": "Save to Google Drive",
+		"file": "images/driveicon32.png"
+	},
+	"nckgahadagoaajjgafhacjanaoiihapd": {
+		"name": "Google Hangouts",
+		"file": "images_5/ic_drag.png"
+	},
+	"mclkkofklkfljcocdinagocijmpgbhab": {
+		"name": "Google Input Tools",
+		"file": "_locales/fa/messages.json"
+	},
+	"mgijmajocgfcbeboacabfgobmjgjcoja": {
+		"name": "Google Dictionary",
+		"file": "content.min.css"
+	},
+
+	// Privacy/Security
+	"bkdgflcldnnnapblkhphbgpggdiikppg": {
+		"name": "DuckDuckGo Privacy Essentials",
+		"file": "public/css/autofill.css"
+	},
+	"gcbommkclmclpchllfjekcdonpmejbdp": {
+		"name": "HTTPS Everywhere",
+		"file": "pages/cancel/index.html"
+	},
+	"eiimnmioipafcokbfikbljfdeojpcgbh": {
+		"name": "BlockSite",
+		"file": "public/images/about-on.svg"
+	},
+	"oldceeleldhonbafppcapldpdifcinji": {
+		"name": "LanguageTool",
+		"file": "assets/images/16/special/icon_16_special_switch_active.svg"
+	},
+	"fgddmllnllkalaagkghckoinaemmogpe": {
+		"name": "ExpressVPN",
+		"file": "images/toolbar-icon-16.png"
+	},
+
+	"gomekmidlodglbbmalcneegieacbdmki": {
+		"name": "Avast",
+		"file": "locales/Locale-en.json"
+	},
+
+	// Education
+	"ecnphlgnajanjnkcmbpancdjoidceilk": {
+		"name": "Kami",
+		"file": "delegate.html"
+	},
+
+	// Teaching
+	"mmeijimgabbpbgpdklnllpncmdofkcpn": {
+		"name": "Screencastify",
+		"file": "cam-frame.html"
+	},
+	"nlipoenfbbikpbjkfpfillcgkoblgpmj": {
+		"name": "Awesome Screenshot",
+		"file": "images/clear.png"
+	},
+	
+	// Dev
+	"bhlhnicpbhignbdhedgjhgdocnmhomnp": {
+		"name": "ColorZilla",
+		"file": "css/content-style.css"
+	},
+	"fmkadmapgofadopljbjfkapdkoienihi": {
+		"name": "React Developer Tools",
+		"file": "main.html"
+	},
+	"nhdogjmejiglipccpnnnanhbledajbpd": {
+		"name": "Vue.js devtools",
+		"file": "devtools.html"
+	},
+	"gppongmhjkpfnbhagpmjfkannfbllamg": {
+		"name": "Wappalyzer",
+		"file": "js/dom.js"
+	},
+	"gbmdgpbipfallnflgajpaliibnhdgobh": {
+		"name": "JSON Viewer",
+		"file": "assets/viewer-alert.css"
+	},
+
+	// Password
+	"nngceckbapebfimnlniiiahkandclblb": {
+		"name": "Bitwarden",
+		"file": "notification/bar.html"
+	},
+	"hdokiejnpimakedhajhdlcegeplioahd": {
+		"name": "LastPass",
+		"file": "images/infield/password-light.png"
+	},
+
+	// Other
+	"gpdjojdkbbmdfjfahjcgigfpmkopogic": {
+		"name": "Pinterest Save Button",
+		"file": "html/create.html"
+	},
+	"pioclpoplcdbaefihamjohnefbikjilc": {
+		"name": "Evernote Web Clipper",
+		"file": "OptionsFrame.html"
+	}
+})
+
+const getActiveChromeExtensions = async () => {
+	const extensions = getExtensions()
+	const urls = Object.keys(extensions).map(key => `chrome-extension://${key}/${extensions[key].file}`)
+	const idMatcher = /\/\/([^\/]+)/
+	const getName = res => extensions[idMatcher.exec(res.url)[1]].name
+	const result = Promise.all(urls.map(url => fetch(url).then(getName).catch(e => {}))).then(res => res.filter(x => !!x))
+	return result
+}
+
+const start = performance.now()
+const activeExtensions = await getActiveChromeExtensions()
+const perf = performance.now() - start
+
+const extensions = getExtensions()
+const getStoreAnchorTag = (name, extensions) => {
+	const path = 'https://chrome.google.com/webstore/detail/'
+	const id = Object.keys(extensions).find(key => extensions[key].name == name)
+	return `<a href="${path}${id}" target="_blank">↗️</a>`
+}
+const extensionLibrary = Object.keys(extensions).reduce((acc, key) => [...acc, extensions[key].name], [])
+patch(document.getElementById('fingerprint-data'), html`
+	<div id="fingerprint-data">
+		<style>
+			.active {
+				color: MediumAquaMarine 
+			}
+		</style>
+		<div class="visitor-info relative">
+			<span class="aside-note">${perf.toFixed(2)}ms</span>
+			<strong>Chrome Extensions</strong><span class="hash">${hashMini(activeExtensions)}</span>
+			<div>${''+activeExtensions.length} of ${extensionLibrary.length} detected</div>
+		</div>
+		<div>
+		${
+			extensionLibrary
+				.sort()
+				.map(name => `
+					<div class="${!activeExtensions.includes(name) ? '' : 'active'}">
+						${getStoreAnchorTag(name, extensions)} ${name}
+					</div>
+				`)
+				.join('')
+		}
+		</div>
+	</div>
+`)
 
 })()

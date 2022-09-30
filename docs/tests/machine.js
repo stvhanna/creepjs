@@ -1,11 +1,11 @@
 (async () => {
 
-	const hashMini = str => {
-		const json = `${JSON.stringify(str)}`
-		let i, len, hash = 0x811c9dc5
-		for (i = 0, len = json.length; i < len; i++) {
-			hash = Math.imul(31, hash) + json.charCodeAt(i) | 0
-		}
+	const hashMini =  x => {
+		if (!x) return x
+		const json = `${JSON.stringify(x)}`
+		const hash = json.split('').reduce((hash, char, i) => {
+			return Math.imul(31, hash) + json.charCodeAt(i) | 0
+		}, 0x811c9dc5)
 		return ('0000000' + (hash >>> 0).toString(16)).substr(-8)
 	}
 
@@ -18,30 +18,12 @@
 		return hashHex
 	}
 
-	// ie11 fix for template.content
-	function templateContent(template) {
-		// template {display: none !important} /* add css if template is in dom */
-		if ('content' in document.createElement('template')) {
-			return document.importNode(template.content, true)
-		} else {
-			const frag = document.createDocumentFragment()
-			const children = template.childNodes
-			for (let i = 0, len = children.length; i < len; i++) {
-				frag.appendChild(children[i].cloneNode(true))
-			}
-			return frag
-		}
-	}
-
-	// tagged template literal (JSX alternative)
-	const patch = (oldEl, newEl, fn = null) => {
-		oldEl.parentNode.replaceChild(newEl, oldEl)
-		return typeof fn === 'function' ? fn() : true
-	}
-	const html = (stringSet, ...expressionSet) => {
+	// template views
+	const patch = (oldEl, newEl) => oldEl.parentNode.replaceChild(newEl, oldEl)
+	const html = (str, ...expressionSet) => {
 		const template = document.createElement('template')
-		template.innerHTML = stringSet.map((str, i) => `${str}${expressionSet[i] || ''}`).join('')
-		return templateContent(template) // ie11 fix for template.content
+		template.innerHTML = str.map((s, i) => `${s}${expressionSet[i] || ''}`).join('')
+		return document.importNode(template.content, true)
 	}
 
 	const pass = () => `<span class="pass">&#10004;</span>`
@@ -157,7 +139,7 @@
 	const linuxNoise = /^([a-z]|x11|unknown|compatible|[a-z]{2}(-|_)[a-z]{2}|[a-z]{2})$|(rv:|java|oracle|\+http|http|unknown|mozilla|konqueror|valve).+/i
 	const apple = /(cpu iphone|cpu os|iphone os|mac os|macos|intel os|ppc mac).+/i
 	const appleNoise = /^([a-z]|macintosh|compatible|mimic|[a-z]{2}(-|_)[a-z]{2}|[a-z]{2}|rv|\d+\.\d+)$|(rv:|silk|valve).+/i
-	const appleRelease = /(ppc |intel |)(mac|mac |)os (x |x|)\d+/i
+	const appleRelease = /(ppc |intel |)(mac|mac |)os (x |x|)(\d{2}(_|\.)\d{1,2}|\d{2,})/i
 	const otherOS = /((symbianos|nokia|blackberry|morphos|mac).+)|\/linux|freebsd|symbos|series \d+|win\d+|unix|hp-ux|bsdi|bsd|x86_64/i
 
 	const isDevice = (list, device) => list.filter(x => device.test(x)).length
@@ -228,7 +210,33 @@
 			return ua
 		} else if (isDevice(ua.identifiers, apple)) {
 			ua.parsed = ua.identifiers
-				.map(x => appleRelease.test(x) ? appleRelease.exec(x)[0] : x)
+				.map(x => {
+					if (appleRelease.test(x)) {
+						const release = appleRelease.exec(x)[0]
+						const versionMap = {
+							'10_7': 'Lion',
+							'10_8': 'Mountain Lion',
+							'10_9': 'Mavericks',
+							'10_10': 'Yosemite',
+							'10_11': 'El Capitan',
+							'10_12': 'Sierra',
+							'10_13': 'High Sierra',
+							'10_14': 'Mojave',
+							'10_15': 'Catalina',
+							'11': 'Big Sur',
+							'12': 'Monterey'
+						}
+						const version = (
+							(/(\d{2}(_|\.)\d{1,2}|\d{2,})/.exec(release) || [])[0] ||
+							''
+						).replace(/\./g, '_')
+						const isOSX = /^10/.test(version)
+						const id = isOSX ? version : (/^\d{2,}/.exec(version) || [])[0]
+						const codeName = versionMap[id]
+						return codeName ? `macOS ${codeName}` : release
+					}
+					return x
+				})
 				.filter(x => !(appleNoise.test(x)))
 				.join(' ')
 				.replace(/\slike mac.+/ig, '')

@@ -1,38 +1,20 @@
 (async () => {
 
-	const hashMini = str => {
-		const json = `${JSON.stringify(str)}`
-		let i, len, hash = 0x811c9dc5
-		for (i = 0, len = json.length; i < len; i++) {
-			hash = Math.imul(31, hash) + json.charCodeAt(i) | 0
-		}
+	const hashMini =  x => {
+		if (!x) return x
+		const json = `${JSON.stringify(x)}`
+		const hash = json.split('').reduce((hash, char, i) => {
+			return Math.imul(31, hash) + json.charCodeAt(i) | 0
+		}, 0x811c9dc5)
 		return ('0000000' + (hash >>> 0).toString(16)).substr(-8)
 	}
 
-	// ie11 fix for template.content
-	function templateContent(template) {
-		// template {display: none !important} /* add css if template is in dom */
-		if ('content' in document.createElement('template')) {
-			return document.importNode(template.content, true)
-		} else {
-			const frag = document.createDocumentFragment()
-			const children = template.childNodes
-			for (let i = 0, len = children.length; i < len; i++) {
-				frag.appendChild(children[i].cloneNode(true))
-			}
-			return frag
-		}
-	}
-
-	// tagged template literal (JSX alternative)
-	const patch = (oldEl, newEl, fn = null) => {
-		oldEl.parentNode.replaceChild(newEl, oldEl)
-		return typeof fn === 'function' ? fn() : true
-	}
-	const html = (stringSet, ...expressionSet) => {
+	// template views
+	const patch = (oldEl, newEl) => oldEl.parentNode.replaceChild(newEl, oldEl)
+	const html = (str, ...expressionSet) => {
 		const template = document.createElement('template')
-		template.innerHTML = stringSet.map((str, i) => `${str}${expressionSet[i] || ''}`).join('')
-		return templateContent(template) // ie11 fix for template.content
+		template.innerHTML = str.map((s, i) => `${s}${expressionSet[i] || ''}`).join('')
+		return document.importNode(template.content, true)
 	}
 
 	const query = ({ type, rangeStart, rangeLen }) => {
@@ -41,9 +23,9 @@
 		<div id="fingerprint-data">
 			<style>
 				${[...Array(rangeLen)].map((slot, i) => {
-			i += rangeStart
-			return `@media(device-${type}:${i}px){body{--device-${type}:${i};}}`
-		}).join('')}
+					i += rangeStart
+					return `@media(device-${type}:${i}px){body{--device-${type}:${i};}}`
+				}).join('')}
 			</style>
 		</div>
 	`)
@@ -51,66 +33,55 @@
 		return style.getPropertyValue(`--device-${type}`).trim()
 	}
 
-	const getScreenMedia = () => {
-		let i, widthMatched, heightMatched
-		for (i = 0; i < 10; i++) {
-			let resWidth, resHeight
-			if (!widthMatched) {
-				resWidth = query({ type: 'width', rangeStart: i * 1000, rangeLen: 1000 })
-				if (resWidth) {
-					widthMatched = resWidth
-				}
+	const match = ({ type, rangeStart, rangeLen }) => {
+		let found
+		;[...Array(rangeLen)].find((slot, i) => {
+			i += rangeStart
+			const { matches } = matchMedia(`(device-${type}:${i}px)`) || {}
+			if (matches) {
+				found = i
 			}
-			if (!heightMatched) {
-				resHeight = query({ type: 'height', rangeStart: i * 1000, rangeLen: 1000 })
-				if (resHeight) {
-					heightMatched = resHeight
-				}
-			}
-			if (widthMatched && heightMatched) {
-				break
-			}
-		}
-		return { width: widthMatched, height: heightMatched }
+			return matches
+		})
+		return +found
 	}
 
-	const getScreenMatchMedia = () => {
-		let widthMatched, heightMatched
-		for (let i = 0; i < 10; i++) {
-			let resWidth, resHeight
-			if (!widthMatched) {
-				let rangeStart = i * 1000
-				const rangeLen = 1000
-				for (let i = 0; i < rangeLen; i++) {
-					if (matchMedia(`(device-width:${rangeStart}px)`).matches) {
-						resWidth = rangeStart
-						break
-					}
-					rangeStart++
-				}
-				if (resWidth) {
-					widthMatched = resWidth
-				}
-			}
-			if (!heightMatched) {
-				let rangeStart = i * 1000
-				const rangeLen = 1000
-				for (let i = 0; i < rangeLen; i++) {
-					if (matchMedia(`(device-height:${rangeStart}px)`).matches) {
-						resHeight = rangeStart
-						break
-					}
-					rangeStart++
-				}
-				if (resHeight) {
-					heightMatched = resHeight
-				}
-			}
-			if (widthMatched && heightMatched) {
-				break
-			}
+	const getScreenMedia = ({ width, height }) => {
+		let widthMatch = query({ type: 'width', rangeStart: width, rangeLen: 1 })
+		let heightMatch = query({ type: 'height', rangeStart: height, rangeLen: 1 })
+		if (widthMatch && heightMatch) {
+			return { width, height }	
 		}
-		return { width: widthMatched, height: heightMatched }
+		const rangeLen = 1000
+		;[...Array(10)].find((slot, i) => {
+			if (!widthMatch) {
+				widthMatch = query({ type: 'width', rangeStart: i * rangeLen, rangeLen })
+			}
+			if (!heightMatch) {
+				heightMatch = query({ type: 'height', rangeStart: i * rangeLen, rangeLen })
+			}
+			return widthMatch && heightMatch
+		})
+		return { width: +widthMatch, height: +heightMatch }
+	}
+
+	const getScreenMatchMedia = ({ width, height }) => {
+		let widthMatch = matchMedia(`(device-width:${width}px)`).matches
+		let heightMatch = matchMedia(`(device-height:${height}px)`).matches
+		if (widthMatch && heightMatch) {
+			return { width, height }	
+		}
+		const rangeLen = 1000
+		;[...Array(10)].find((slot, i) => {
+			if (!widthMatch) {
+				widthMatch = match({ type: 'width', rangeStart: i * rangeLen, rangeLen })
+			}
+			if (!heightMatch) {
+				heightMatch = match({ type: 'height', rangeStart: i * rangeLen, rangeLen })
+			}
+			return widthMatch && heightMatch
+		})
+		return { width: +widthMatch, height: +heightMatch }
 	}
 
 	const getCSS = () => {
@@ -189,8 +160,8 @@
 
 	const vViewport = 'visualViewport' in window ? visualViewport : {}
 	const { width: viewportWidth, height: viewportHeight } = vViewport
-	const { width: mediaWidth, height: mediaHeight } = getScreenMedia()
-	const { width: matchMediaWidth, height: matchMediaHeight } = getScreenMatchMedia()
+	const { width: mediaWidth, height: mediaHeight } = getScreenMedia({ width, height })
+	const { width: matchMediaWidth, height: matchMediaHeight } = getScreenMatchMedia({ width, height })
 	const {
 		domRectViewport,
 		viewport,

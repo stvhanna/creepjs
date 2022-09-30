@@ -1,9 +1,9 @@
+/* eslint-disable @typescript-eslint/no-var-requires */
 const express = require('express')
-const fs = require('fs')
 const path = require('path')
-const staticPath = path.join(__dirname, '/')
+const home = path.join(__dirname, '/public')
 const app = express()
-
+app.use(express.static(home))
 
 // redirect /tests/ to /docs/tests
 app.use('*', (req, res, next) => {
@@ -14,7 +14,6 @@ app.use('*', (req, res, next) => {
 	}
 	return next()
 })
-
-app.use(express.static(staticPath))
+app.use('/docs', express.static(__dirname + '/docs'))
 
 app.listen(8000, () => console.log('⚡'))

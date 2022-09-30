@@ -1,16 +1,10 @@
 (async () => {
-	const hashMini = str => {
-		if (typeof str == 'number') {
-			return str
-		}
-		else if (!str || JSON.stringify(str) == '{}') {
-			return 'undefined'
-		}
-		const json = `${JSON.stringify(str)}`
-		let i, len, hash = 0x811c9dc5
-		for (i = 0, len = json.length; i < len; i++) {
-			hash = Math.imul(31, hash) + json.charCodeAt(i) | 0
-		}
+	const hashMini =  x => {
+		if (!x) return x
+		const json = `${JSON.stringify(x)}`
+		const hash = json.split('').reduce((hash, char, i) => {
+			return Math.imul(31, hash) + json.charCodeAt(i) | 0
+		}, 0x811c9dc5)
 		return ('0000000' + (hash >>> 0).toString(16)).substr(-8)
 	}
 
@@ -23,30 +17,12 @@
 		return hashHex
 	}
 
-	// ie11 fix for template.content
-	function templateContent(template) {
-		// template {display: none !important} /* add css if template is in dom */
-		if ('content' in document.createElement('template')) {
-			return document.importNode(template.content, true)
-		} else {
-			const frag = document.createDocumentFragment()
-			const children = template.childNodes
-			for (let i = 0, len = children.length; i < len; i++) {
-				frag.appendChild(children[i].cloneNode(true))
-			}
-			return frag
-		}
-	}
-
-	// tagged template literal (JSX alternative)
-	const patch = (oldEl, newEl, fn = null) => {
-		oldEl.parentNode.replaceChild(newEl, oldEl)
-		return typeof fn === 'function' ? fn() : true
-	}
-	const html = (stringSet, ...expressionSet) => {
+	// template views
+	const patch = (oldEl, newEl) => oldEl.parentNode.replaceChild(newEl, oldEl)
+	const html = (str, ...expressionSet) => {
 		const template = document.createElement('template')
-		template.innerHTML = stringSet.map((str, i) => `${str}${expressionSet[i] || ''}`).join('')
-		return templateContent(template) // ie11 fix for template.content
+		template.innerHTML = str.map((s, i) => `${s}${expressionSet[i] || ''}`).join('')
+		return document.importNode(template.content, true)
 	}
 
 	const getOS = userAgent => {
@@ -161,8 +137,8 @@
 	}
 
 	// get feature data
-	const webapp = 'https://script.google.com/macros/s/AKfycbw26MLaK1PwIGzUiStwweOeVfl-sEmIxFIs5Ax7LMoP1Cuw-s0llN-aJYS7F8vxQuVG-A/exec'
-	const samples = await fetch(webapp)
+	const url = '../data/samples.json'
+	const samples = await fetch(url)
 		.then(response => response.json())
 		.catch(error => {
 			console.error(error)
@@ -530,9 +506,15 @@
 					valid.verRestored = false
 				}
 
-				const knownFeatures = /\s/.test(features)
-				const validFeatures = features == verBase
-				if (knownFeatures && !validFeatures) {
+				const knownVersion = /\s/.test(features) && /\d/.test(features)
+				const featuresVersion = (/\d+/.exec(features)||[])[0]
+				const baseVersion = (/\d+/.exec(verBase)||[])[0]
+				const validFeatures = (
+					baseVersion >= (+featuresVersion-1) &&
+					baseVersion <= (+featuresVersion+1)
+				)
+
+				if (knownVersion && !validFeatures) {
 					valid.features = false
 				}
 
@@ -589,7 +571,7 @@
 					!verRestored ? 'undefined' : !validVerRestored ? 'lies' : ''
 					}" data-label="${label.verRestored}">${verRestored}</td>
 									<td class="${
-					!features ? 'undefined' : knownFeatures && !validFeatures ? 'lies' : ''
+					!features ? 'undefined' : !valid.features ? 'lies' : ''
 					}" data-label="${label.features}">${features}</td>
 									<td class="${
 					!platform ? 'undefined' : !validPlatform ? 'lies' : ''
@@ -614,7 +596,7 @@
 			!valid.verReported && invalid.push(valid.fail('expect reported version to match window'))
 			!valid.uaRestored && invalid.push(valid.fail('expect restored userAgent to match each reported userAgent'))
 			!valid.verRestored && invalid.push(valid.fail('expect restored version to match each reported version'))
-			!valid.features && invalid.push(valid.fail('expect known features to match window reported version'))
+			!valid.features && invalid.push(valid.fail('expect reported window version to closely match known features version'))
 			!valid.platform && invalid.push(valid.fail('expect platform to match window'))
 			!valid.canvas && invalid.push(valid.fail('expect canvas to match window'))
 			!valid.connection && invalid.push(valid.fail('expect connections in accepted iframes'))
